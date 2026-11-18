@@ -220,7 +220,7 @@
       </div>
       <div class="card browser" id="browser">
         <div class="loadbar"><span id="loadFill"></span></div>
-        <div class="overlay-msg show" id="loading"><div class="spin"></div><p>در حال بارگذاری…</p></div>
+        <div class="overlay-msg show" id="loading"><div class="big">⌂</div><p>مرورگر مستقل ماز ویدیو آماده است.<br>برای ورود به biomaze.ir دکمه زیر را بزن.</p><button class="btn" style="flex:none;padding:0 26px" id="openSiteBtn">باز کردن سایت</button></div>
         <div class="overlay-msg" id="blocked">
           <svg class="big" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
           <p>صفحه بارگذاری نشد.<br>اتصال اینترنت را بررسی کن و دوباره تلاش کن.</p>
@@ -345,8 +345,9 @@
   frame.addEventListener('error', fail);
   $('#reloadBtn').onclick = () => { load(); };
   $('#retryBtn').onclick = load;
+  $('#openSiteBtn').onclick = load;
   $('#backBtn').onclick = () => { history.back(); };     // به صفحه قبلی در تاریخچه‌ی مرورگر برمی‌گردد
-  if (navigator.onLine === false) fail(); else load();
+  if (navigator.onLine === false) fail();
   addEventListener('offline', fail);
   addEventListener('online', load);
 

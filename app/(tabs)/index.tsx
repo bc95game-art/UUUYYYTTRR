@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Asset } from "expo-asset";
-import { WebView, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
+import { WebView, type FileDownload, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
 import { useVideoPlayer, VideoView } from "expo-video";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -66,9 +66,17 @@ export default function HomeScreen() {
   }, [files, sendFiles]);
 
   const onBrowserNavigation = (nav: WebViewNavigation) => { setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
+  const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => {
+    const url = event.nativeEvent.downloadUrl;
+    if (!url || !FileSystem.documentDirectory) return;
+    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
+    const clean = decodeURIComponent(url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`).replace(/[^\p{L}\p{N}._-]/gu, "_");
+    const target = `${OFFLINE_DIR}${clean || `biomaze-${Date.now()}.mp4`}`;
+    await FileSystem.downloadAsync(url, target).then(() => readFiles()).catch(() => undefined);
+  }, [readFiles]);
   const header = <SafeAreaView edges={["top"]} style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-forward" size={23} color="#fff" /></Pressable><Text style={styles.headerTitle} numberOfLines={1}>{browserTitle}</Text><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#fff" /></Pressable></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
+  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onFileDownload={onFileDownload} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
   if (!htmlUri || loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /><Text style={styles.loaderText}>در حال آماده‌سازی مرورگر…</Text></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ uri: htmlUri }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={() => { setLoading(false); sendFiles(); }} /></View>;
 }
