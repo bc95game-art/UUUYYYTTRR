@@ -1,48 +1,18 @@
-import { ScrollView, Text, View, TouchableOpacity } from "react-native";
-
+import { useRouter } from "expo-router";
+import { ScrollView, Text, View, Pressable, StyleSheet } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
 
-/**
- * Home Screen - NativeWind Example
- *
- * This template uses NativeWind (Tailwind CSS for React Native).
- * You can use familiar Tailwind classes directly in className props.
- *
- * Key patterns:
- * - Use `className` instead of `style` for most styling
- * - Theme colors: use tokens directly (bg-background, text-foreground, bg-primary, etc.); no dark: prefix needed
- * - Responsive: standard Tailwind breakpoints work on web
- * - Custom colors defined in tailwind.config.js
- */
 export default function HomeScreen() {
-  return (
-    <ScreenContainer className="p-6">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="flex-1 gap-8">
-          {/* Hero Section */}
-          <View className="items-center gap-2">
-            <Text className="text-4xl font-bold text-foreground">Welcome</Text>
-            <Text className="text-base text-muted text-center">
-              Edit app/(tabs)/index.tsx to get started
-            </Text>
-          </View>
-
-          {/* Example Card */}
-          <View className="w-full max-w-sm self-center bg-surface rounded-2xl p-6 shadow-sm border border-border">
-            <Text className="text-lg font-semibold text-foreground mb-2">NativeWind Ready</Text>
-            <Text className="text-sm text-muted leading-relaxed">
-              Use Tailwind CSS classes directly in your React Native components.
-            </Text>
-          </View>
-
-          {/* Example Button */}
-          <View className="items-center">
-            <TouchableOpacity className="bg-primary px-6 py-3 rounded-full active:opacity-80">
-              <Text className="text-background font-semibold">Get Started</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </ScreenContainer>
-  );
+  const colors = useColors();
+  const router = useRouter();
+  return <ScreenContainer edges={["top", "left", "right"]}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.header}><View><Text style={[styles.eyebrow,{color:colors.tint}]}>ماز ویدیو</Text><Text style={[styles.greeting,{color:colors.foreground}]}>سلام، پژمان</Text><Text style={[styles.muted,{color:colors.muted}]}>ادامهٔ یادگیری، حتی بدون اینترنت</Text></View><View style={[styles.avatar,{backgroundColor:colors.tint}]}><Text style={styles.avatarText}>پ</Text></View></View>
+    <View style={[styles.hero,{backgroundColor:colors.tint}]}><Text style={styles.heroLabel}>کتابخانهٔ آفلاین</Text><Text style={styles.heroTitle}>ویدئوهایت همیشه همراهت هستند</Text><Text style={styles.heroSub}>ویدئوهای ذخیره‌شده را بدون ورود دوباره به سایت تماشا کن.</Text><Pressable style={styles.heroButton} onPress={()=>router.push("/library")}><Text style={{color:colors.tint,fontWeight:"800"}}>مشاهدهٔ ذخیره‌شده‌ها</Text><MaterialIcons name="arrow-back" size={18} color={colors.tint}/></Pressable></View>
+    <View style={styles.sectionRow}><Text style={[styles.sectionTitle,{color:colors.foreground}]}>ادامهٔ تماشا</Text><Pressable onPress={()=>router.push("/library")}><Text style={{color:colors.tint,fontWeight:"700"}}>همه</Text></Pressable></View>
+    <Pressable style={[styles.videoCard,{backgroundColor:colors.surface,borderColor:colors.border}]} onPress={()=>router.push("/library")}><View style={styles.thumb}><MaterialIcons name="play-arrow" size={32} color="#fff"/><View style={styles.offlineBadge}><MaterialIcons name="cloud-off" size={12} color="#fff"/><Text style={styles.offlineText}>آفلاین</Text></View></View><View style={styles.videoInfo}><Text style={[styles.videoTitle,{color:colors.foreground}]}>جلسه ۱۳ — تحلیل تکنیکال عرضه و تقاضا</Text><Text style={[styles.muted,{color:colors.muted}]}>کلاس جامع سالیانه اقتصاد</Text><View style={styles.progressRow}><View style={[styles.progressTrack,{backgroundColor:colors.border}]}><View style={[styles.progressFill,{backgroundColor:colors.tint,width:"42%"}]}/></View><Text style={[styles.progressText,{color:colors.tint}]}>۴۲٪</Text></View><Text style={[styles.meta,{color:colors.muted}]}>۳۳۸٫۷ مگابایت  •  ۱:۲۷:۱۰</Text></View></Pressable>
+    <View style={styles.sectionRow}><Text style={[styles.sectionTitle,{color:colors.foreground}]}>وضعیت ذخیره‌سازی</Text><Text style={{color:colors.muted}}>همین دستگاه</Text></View><View style={[styles.storageCard,{backgroundColor:colors.surface,borderColor:colors.border}]}><View style={[styles.storageIcon,{backgroundColor:colors.tint+"18"}]}><MaterialIcons name="sd-storage" size={22} color={colors.tint}/></View><View style={{flex:1}}><Text style={[styles.storageTitle,{color:colors.foreground}]}>۳۳۸٫۷ مگابایت استفاده شده</Text><Text style={[styles.muted,{color:colors.muted}]}>از ۱۰ گیگابایت فضای آفلاین</Text><View style={[styles.progressTrack,{backgroundColor:colors.border,marginTop:9}]}><View style={[styles.progressFill,{backgroundColor:colors.tint,width:"3.3%"}]}/></View></View><Text style={[styles.storagePercent,{color:colors.tint}]}>۳٪</Text></View>
+  </ScrollView></ScreenContainer>;
 }
+const styles=StyleSheet.create({content:{padding:20,paddingBottom:32},header:{flexDirection:"row-reverse",justifyContent:"space-between",alignItems:"center",marginBottom:20},eyebrow:{fontSize:14,fontWeight:"800",textAlign:"right"},greeting:{fontSize:26,fontWeight:"900",marginTop:3,textAlign:"right"},muted:{fontSize:12,lineHeight:19,textAlign:"right"},avatar:{width:48,height:48,borderRadius:16,alignItems:"center",justifyContent:"center"},avatarText:{color:"#fff",fontSize:22,fontWeight:"800"},hero:{borderRadius:24,padding:20,marginBottom:24},heroLabel:{color:"#dbeafe",fontSize:12,fontWeight:"700",textAlign:"right"},heroTitle:{color:"#fff",fontSize:22,fontWeight:"900",lineHeight:32,textAlign:"right",marginTop:6},heroSub:{color:"#e0ecff",fontSize:13,lineHeight:21,textAlign:"right",marginTop:5},heroButton:{alignSelf:"flex-end",marginTop:18,backgroundColor:"#fff",borderRadius:12,paddingVertical:10,paddingHorizontal:13,flexDirection:"row-reverse",gap:7,alignItems:"center"},sectionRow:{flexDirection:"row-reverse",justifyContent:"space-between",alignItems:"center",marginBottom:10,marginTop:3},sectionTitle:{fontSize:17,fontWeight:"900"},videoCard:{borderRadius:18,borderWidth:1,padding:10,flexDirection:"row-reverse",gap:12},thumb:{width:104,height:118,borderRadius:13,backgroundColor:"#1e3a8a",alignItems:"center",justifyContent:"center"},offlineBadge:{position:"absolute",bottom:7,left:7,backgroundColor:"#0f172acc",borderRadius:8,paddingVertical:4,paddingHorizontal:6,flexDirection:"row-reverse",alignItems:"center",gap:3},offlineText:{color:"#fff",fontSize:9,fontWeight:"700"},videoInfo:{flex:1,justifyContent:"center"},videoTitle:{fontSize:14,fontWeight:"800",lineHeight:22,textAlign:"right"},progressRow:{flexDirection:"row-reverse",alignItems:"center",gap:8,marginTop:12},progressTrack:{height:6,borderRadius:6,overflow:"hidden",flex:1},progressFill:{height:"100%",borderRadius:6},progressText:{fontSize:11,fontWeight:"800"},meta:{fontSize:10,marginTop:9,textAlign:"right"},storageCard:{borderRadius:18,borderWidth:1,padding:14,flexDirection:"row-reverse",gap:11,alignItems:"center"},storageIcon:{width:42,height:42,borderRadius:13,alignItems:"center",justifyContent:"center"},storageTitle:{fontSize:13,fontWeight:"800",textAlign:"right"},storagePercent:{fontSize:12,fontWeight:"900"}});
