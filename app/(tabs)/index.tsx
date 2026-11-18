@@ -1,18 +1,76 @@
-import { useRouter } from "expo-router";
-import { ScrollView, Text, View, Pressable, StyleSheet } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Asset } from "expo-asset";
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
+import * as FileSystem from "expo-file-system/legacy";
+import { useVideoPlayer, VideoView } from "expo-video";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { ScreenContainer } from "@/components/screen-container";
-import { useColors } from "@/hooks/use-colors";
+
+const SITE = "https://biomaze.ir/";
+const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
+type OfflineFile = { id: number; uri: string; name: string; size: number; date: string };
+
+type Mode = "ui" | "browser" | "player";
+
+function NativePlayer({ file, onClose }: { file: OfflineFile; onClose: () => void }) {
+  const player = useVideoPlayer(file.uri, (p) => { p.play(); });
+  return <View style={styles.player}><SafeAreaView edges={["top"]} style={styles.playerBar}><Pressable onPress={onClose} style={styles.close}><MaterialIcons name="arrow-forward" size={24} color="#fff" /></Pressable><Text style={styles.playerTitle} numberOfLines={1}>{file.name}</Text></SafeAreaView><VideoView player={player} style={styles.video} nativeControls /></View>;
+}
 
 export default function HomeScreen() {
-  const colors = useColors();
-  const router = useRouter();
-  return <ScreenContainer edges={["top", "left", "right"]}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <View style={styles.header}><View><Text style={[styles.eyebrow,{color:colors.tint}]}>ماز ویدیو</Text><Text style={[styles.greeting,{color:colors.foreground}]}>سلام، پژمان</Text><Text style={[styles.muted,{color:colors.muted}]}>ادامهٔ یادگیری، حتی بدون اینترنت</Text></View><View style={[styles.avatar,{backgroundColor:colors.tint}]}><Text style={styles.avatarText}>پ</Text></View></View>
-    <View style={[styles.hero,{backgroundColor:colors.tint}]}><Text style={styles.heroLabel}>کتابخانهٔ آفلاین</Text><Text style={styles.heroTitle}>ویدئوهایت همیشه همراهت هستند</Text><Text style={styles.heroSub}>ویدئوهای ذخیره‌شده را بدون ورود دوباره به سایت تماشا کن.</Text><Pressable style={styles.heroButton} onPress={()=>router.push("/library")}><Text style={{color:colors.tint,fontWeight:"800"}}>مشاهدهٔ ذخیره‌شده‌ها</Text><MaterialIcons name="arrow-back" size={18} color={colors.tint}/></Pressable></View>
-    <View style={styles.sectionRow}><Text style={[styles.sectionTitle,{color:colors.foreground}]}>ادامهٔ تماشا</Text><Pressable onPress={()=>router.push("/library")}><Text style={{color:colors.tint,fontWeight:"700"}}>همه</Text></Pressable></View>
-    <Pressable style={[styles.videoCard,{backgroundColor:colors.surface,borderColor:colors.border}]} onPress={()=>router.push("/library")}><View style={styles.thumb}><MaterialIcons name="play-arrow" size={32} color="#fff"/><View style={styles.offlineBadge}><MaterialIcons name="cloud-off" size={12} color="#fff"/><Text style={styles.offlineText}>آفلاین</Text></View></View><View style={styles.videoInfo}><Text style={[styles.videoTitle,{color:colors.foreground}]}>جلسه ۱۳ — تحلیل تکنیکال عرضه و تقاضا</Text><Text style={[styles.muted,{color:colors.muted}]}>کلاس جامع سالیانه اقتصاد</Text><View style={styles.progressRow}><View style={[styles.progressTrack,{backgroundColor:colors.border}]}><View style={[styles.progressFill,{backgroundColor:colors.tint,width:"42%"}]}/></View><Text style={[styles.progressText,{color:colors.tint}]}>۴۲٪</Text></View><Text style={[styles.meta,{color:colors.muted}]}>۳۳۸٫۷ مگابایت  •  ۱:۲۷:۱۰</Text></View></Pressable>
-    <View style={styles.sectionRow}><Text style={[styles.sectionTitle,{color:colors.foreground}]}>وضعیت ذخیره‌سازی</Text><Text style={{color:colors.muted}}>همین دستگاه</Text></View><View style={[styles.storageCard,{backgroundColor:colors.surface,borderColor:colors.border}]}><View style={[styles.storageIcon,{backgroundColor:colors.tint+"18"}]}><MaterialIcons name="sd-storage" size={22} color={colors.tint}/></View><View style={{flex:1}}><Text style={[styles.storageTitle,{color:colors.foreground}]}>۳۳۸٫۷ مگابایت استفاده شده</Text><Text style={[styles.muted,{color:colors.muted}]}>از ۱۰ گیگابایت فضای آفلاین</Text><View style={[styles.progressTrack,{backgroundColor:colors.border,marginTop:9}]}><View style={[styles.progressFill,{backgroundColor:colors.tint,width:"3.3%"}]}/></View></View><Text style={[styles.storagePercent,{color:colors.tint}]}>۳٪</Text></View>
-  </ScrollView></ScreenContainer>;
+  const webRef = useRef<WebView>(null);
+  const [mode, setMode] = useState<Mode>("ui");
+  const [htmlUri, setHtmlUri] = useState<string | null>(null);
+  const [browserUrl, setBrowserUrl] = useState(SITE);
+  const [browserTitle, setBrowserTitle] = useState("biomaze.ir");
+  const [browserCanGoBack, setBrowserCanGoBack] = useState(false);
+  const [files, setFiles] = useState<OfflineFile[]>([]);
+  const [activeFile, setActiveFile] = useState<OfflineFile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const readFiles = useCallback(async () => {
+    if (!FileSystem.documentDirectory) return [];
+    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
+    const names = await FileSystem.readDirectoryAsync(OFFLINE_DIR).catch(() => []);
+    const output: OfflineFile[] = [];
+    for (const [index, name] of names.filter((x) => !x.startsWith(".")).entries()) {
+      const uri = `${OFFLINE_DIR}${name}`;
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || info.isDirectory) continue;
+      const bytes = "size" in info && typeof info.size === "number" ? info.size : 0;
+      output.push({ id: index + 1, uri, name, size: Math.max(1, Math.round(bytes / 1024 / 1024)), date: "ذخیره‌شده در این برنامه" });
+    }
+    setFiles(output);
+    return output;
+  }, []);
+
+  useEffect(() => { Asset.fromModule(require("../../assets/panel-5.html")).downloadAsync().then((asset) => setHtmlUri(asset.localUri ?? asset.uri)).catch(() => setLoading(false)); readFiles(); }, [readFiles]);
+  useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { if (mode === "player") { setMode("ui"); return true; } if (mode === "browser" && browserCanGoBack) { webRef.current?.goBack(); return true; } if (mode === "browser") { setMode("ui"); return true; } return false; }); return () => sub.remove(); }, [mode, browserCanGoBack]);
+
+  const sendFiles = useCallback(async () => {
+    const latest = await readFiles();
+    webRef.current?.injectJavaScript(`window.receiveFiles(${JSON.stringify(latest.map(({ id, name, size, date }) => ({ id, name, size, date })))}); true;`);
+  }, [readFiles]);
+
+  const onMessage = useCallback(async (event: WebViewMessageEvent) => {
+    let message: { type?: string; url?: string; id?: number; name?: string } = {};
+    try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
+    if (message.type === "open-site") { setBrowserUrl(message.url || SITE); setMode("browser"); return; }
+    if (message.type === "list-files") { await sendFiles(); return; }
+    if (message.type === "open-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) { setActiveFile(file); setMode("player"); } return; }
+    if (message.type === "delete-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) await FileSystem.deleteAsync(file.uri, { idempotent: true }); await sendFiles(); return; }
+    if (message.type === "rename-file" && message.id && message.name?.trim()) { const file = files.find((x) => x.id === message.id); if (file) { const safe = message.name.trim().replace(/[\\/:*?"<>|]/g, "_"); await FileSystem.moveAsync({ from: file.uri, to: `${OFFLINE_DIR}${safe}` }); } await sendFiles(); return; }
+    if (message.type === "clear-cache") { await FileSystem.deleteAsync(`${FileSystem.cacheDirectory ?? ""}`, { idempotent: true }).catch(() => undefined); }
+    if (message.type === "clear-history") { webRef.current?.clearHistory?.(); }
+  }, [files, sendFiles]);
+
+  const onBrowserNavigation = (nav: WebViewNavigation) => { setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
+  const header = <SafeAreaView edges={["top"]} style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-forward" size={23} color="#fff" /></Pressable><Text style={styles.headerTitle} numberOfLines={1}>{browserTitle}</Text><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#fff" /></Pressable></SafeAreaView>;
+  if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
+  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
+  if (!htmlUri || loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /><Text style={styles.loaderText}>در حال آماده‌سازی مرورگر…</Text></View>;
+  return <View style={styles.root}><WebView ref={webRef} source={{ uri: htmlUri }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={() => { setLoading(false); sendFiles(); }} /></View>;
 }
-const styles=StyleSheet.create({content:{padding:20,paddingBottom:32},header:{flexDirection:"row-reverse",justifyContent:"space-between",alignItems:"center",marginBottom:20},eyebrow:{fontSize:14,fontWeight:"800",textAlign:"right"},greeting:{fontSize:26,fontWeight:"900",marginTop:3,textAlign:"right"},muted:{fontSize:12,lineHeight:19,textAlign:"right"},avatar:{width:48,height:48,borderRadius:16,alignItems:"center",justifyContent:"center"},avatarText:{color:"#fff",fontSize:22,fontWeight:"800"},hero:{borderRadius:24,padding:20,marginBottom:24},heroLabel:{color:"#dbeafe",fontSize:12,fontWeight:"700",textAlign:"right"},heroTitle:{color:"#fff",fontSize:22,fontWeight:"900",lineHeight:32,textAlign:"right",marginTop:6},heroSub:{color:"#e0ecff",fontSize:13,lineHeight:21,textAlign:"right",marginTop:5},heroButton:{alignSelf:"flex-end",marginTop:18,backgroundColor:"#fff",borderRadius:12,paddingVertical:10,paddingHorizontal:13,flexDirection:"row-reverse",gap:7,alignItems:"center"},sectionRow:{flexDirection:"row-reverse",justifyContent:"space-between",alignItems:"center",marginBottom:10,marginTop:3},sectionTitle:{fontSize:17,fontWeight:"900"},videoCard:{borderRadius:18,borderWidth:1,padding:10,flexDirection:"row-reverse",gap:12},thumb:{width:104,height:118,borderRadius:13,backgroundColor:"#1e3a8a",alignItems:"center",justifyContent:"center"},offlineBadge:{position:"absolute",bottom:7,left:7,backgroundColor:"#0f172acc",borderRadius:8,paddingVertical:4,paddingHorizontal:6,flexDirection:"row-reverse",alignItems:"center",gap:3},offlineText:{color:"#fff",fontSize:9,fontWeight:"700"},videoInfo:{flex:1,justifyContent:"center"},videoTitle:{fontSize:14,fontWeight:"800",lineHeight:22,textAlign:"right"},progressRow:{flexDirection:"row-reverse",alignItems:"center",gap:8,marginTop:12},progressTrack:{height:6,borderRadius:6,overflow:"hidden",flex:1},progressFill:{height:"100%",borderRadius:6},progressText:{fontSize:11,fontWeight:"800"},meta:{fontSize:10,marginTop:9,textAlign:"right"},storageCard:{borderRadius:18,borderWidth:1,padding:14,flexDirection:"row-reverse",gap:11,alignItems:"center"},storageIcon:{width:42,height:42,borderRadius:13,alignItems:"center",justifyContent:"center"},storageTitle:{fontSize:13,fontWeight:"800",textAlign:"right"},storagePercent:{fontSize:12,fontWeight:"900"}});
+
+const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#0d1620" }, browser: { flex: 1, backgroundColor: "#0d1620" }, nativeHeader: { minHeight: 58, backgroundColor: "#0d1620", flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 10, gap: 10 }, headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#1d8fd0" }, headerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "center" }, loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1620", gap: 12 }, loaderText: { color: "#fff", fontSize: 13 }, player: { flex: 1, backgroundColor: "#000" }, playerBar: { minHeight: 58, backgroundColor: "#000", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 10 }, close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" }, playerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" }, video: { flex: 1, width: "100%" } });

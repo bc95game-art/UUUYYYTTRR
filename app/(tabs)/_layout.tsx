@@ -12,10 +12,10 @@ export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === "web" ? 10 : Math.max(insets.bottom, 8);
-  return <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: colors.tint, tabBarInactiveTintColor: colors.muted, tabBarLabelStyle: { fontSize: 11, fontWeight: "600" }, tabBarStyle: { height: 62 + bottomPadding, paddingTop: 7, paddingBottom: bottomPadding, backgroundColor: colors.background, borderTopColor: colors.border } }}>
-    <Tabs.Screen name="index" options={{ title: "خانه", tabBarIcon: ({ color }) => <TabIcon name="home-filled" color={color} /> }} />
-    <Tabs.Screen name="browser" options={{ title: "مرورگر", tabBarIcon: ({ color }) => <TabIcon name="language" color={color} /> }} />
-    <Tabs.Screen name="library" options={{ title: "ذخیره‌شده", tabBarIcon: ({ color }) => <TabIcon name="download-for-offline" color={color} /> }} />
-    <Tabs.Screen name="settings" options={{ title: "تنظیمات", tabBarIcon: ({ color }) => <TabIcon name="tune" color={color} /> }} />
+  return <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
+    <Tabs.Screen name="index" options={{ title: "مرورگر" }} />
+    <Tabs.Screen name="browser" options={{ href: null }} />
+    <Tabs.Screen name="library" options={{ href: null }} />
+    <Tabs.Screen name="settings" options={{ href: null }} />
   </Tabs>;
 }
