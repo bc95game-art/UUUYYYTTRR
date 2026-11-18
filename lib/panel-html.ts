@@ -39,17 +39,17 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
   /* ---------- قاب ---------- */
   .app {
-    position: relative; width: 410px; height: min(860px, 100vh - 24px);
+    position: relative; width: 100%; max-width: 480px; height: 100dvh;
     background: var(--bg); border-radius: 44px; overflow: hidden;
     box-shadow: 0 0 0 8px #fff, 0 0 0 11px #0a2638, 0 30px 80px rgba(0,0,0,.55);
     display: flex; flex-direction: column; transition: background .3s;
   }
   @media (max-width: 440px) {
     body { align-items: stretch; }
-    .app { width: 100%; height: 100dvh; border-radius: 0; box-shadow: none; }
+    .app { width: 100%; max-width: none; height: 100dvh; border-radius: 0; box-shadow: none; }
   }
 
-  .screen { flex: 1; overflow-y: auto; padding: 18px 14px 100px; scrollbar-width: none; }
+  .screen { flex: 1; overflow-y: auto; padding: max(14px, env(safe-area-inset-top)) 14px calc(96px + env(safe-area-inset-bottom)); scrollbar-width: none; }
   .screen::-webkit-scrollbar { display: none; }
   .page { display: none; flex-direction: column; gap: 14px; min-height: 100%; animation: fade .3s ease both; }
   .page.active { display: flex; }
@@ -76,8 +76,14 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .address .url { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .address .url span { color: var(--hint); font-weight: 500; }
   .address .fixed { font-size: 10.5px; font-weight: 700; color: var(--green); background: rgba(22,191,109,.14); padding: 3px 8px; border-radius: 99px; }
-  .browser { position: relative; flex: 1; min-height: 0; background: #fff; }
-  .browser iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  .browser { position: relative; flex: 1; min-height: 0; background: var(--section); }
+  .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px 22px; min-height: 360px; gap: 10px; }
+  .welcome-icon { width: 78px; height: 78px; border-radius: 24px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); }
+  .welcome-icon svg { width: 42px; height: 42px; }
+  .welcome h1 { font-size: 22px; font-weight: 800; margin-top: 4px; }
+  .welcome p { color: var(--hint); font-size: 14px; line-height: 1.9; }
+  .welcome .welcome-note { max-width: 280px; font-size: 12.5px; }
+  .welcome .open-site { flex: none; width: min(260px, 90%); margin-top: 10px; }
   .loadbar { position: absolute; top: 0; inset-inline: 0; height: 3px; z-index: 3; background: transparent; }
   .loadbar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .3s; }
   .overlay-msg {
@@ -150,7 +156,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .foot { text-align: center; font-size: 12px; color: var(--hint); }
 
   /* ---------- نوار پایین ---------- */
-  .nav { position: absolute; inset-inline: 0; bottom: 0; padding: 8px 12px 14px; display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
+  .nav { position: absolute; inset-inline: 0; bottom: 0; z-index: 20; padding: 8px 12px max(14px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
   .nav > * { pointer-events: auto; }
   .nav::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, var(--bg) 40%, transparent); }
   .glass { background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--separator); box-shadow: var(--nav-shadow); border-radius: 99px; }
@@ -207,7 +213,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
   <main class="screen" id="screen">
 
-    <!-- ===== خانه: مرورگر ===== -->
+    <!-- ===== خانه: مرورگر مستقل ===== -->
     <section class="page active" id="home">
       <div class="toolbar">
         <button class="icon-btn" id="backBtn" aria-label="بازگشت به صفحه قبل"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="M15 18l-6-6 6-6"/></svg></button>
@@ -218,15 +224,12 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
         </div>
         <button class="icon-btn" id="reloadBtn" aria-label="بارگذاری مجدد"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg></button>
       </div>
-      <div class="card browser" id="browser">
-        <div class="loadbar"><span id="loadFill"></span></div>
-        <div class="overlay-msg show" id="loading"><div class="big">⌂</div><p>مرورگر مستقل ماز ویدیو آماده است.<br>برای ورود به biomaze.ir دکمه زیر را بزن.</p><button class="btn" style="flex:none;padding:0 26px" id="openSiteBtn">باز کردن سایت</button></div>
-        <div class="overlay-msg" id="blocked">
-          <svg class="big" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
-          <p>صفحه بارگذاری نشد.<br>اتصال اینترنت را بررسی کن و دوباره تلاش کن.</p>
-          <button class="btn" style="flex:none;padding:0 26px" id="retryBtn">تلاش دوباره</button>
-        </div>
-        <iframe id="frame" title="biomaze.ir" referrerpolicy="no-referrer-when-downgrade" allow="fullscreen; clipboard-write" src="about:blank"></iframe>
+      <div class="card welcome" id="browser">
+        <div class="welcome-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg></div>
+        <h1>ماز ویدیو</h1>
+        <p>مرورگر مستقل و کتابخانهٔ ویدئوهای آفلاین</p>
+        <p class="welcome-note">برای ورود به سایت و ذخیرهٔ ویدئو در حافظهٔ همین برنامه، دکمهٔ زیر را بزن.</p>
+        <button class="btn open-site" id="openSiteBtn">باز کردن سایت</button>
       </div>
     </section>
 
@@ -324,32 +327,13 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   }
   $$('.tab, #bell').forEach(b => b.addEventListener('click', () => go(b.dataset.page)));
 
-  /* ---------- مرورگر ---------- */
-  const frame = $('#frame'), loading = $('#loading'), blocked = $('#blocked'), fill = $('#loadFill');
-  let timer, fakeP = 0, loadedOnce = false;
+  /* ---------- مرورگر مستقل ---------- */
   function load() {
-    blocked.classList.remove('show'); loading.classList.add('show');
-    fakeP = 8; fill.style.width = fakeP + '%';
-    clearInterval(timer);
-    timer = setInterval(() => { fakeP = Math.min(90, fakeP + Math.random() * 9); fill.style.width = fakeP + '%'; }, 250);
     window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'open-site', url: SITE }));
-    setTimeout(() => { if (loading.classList.contains('show')) fail(); }, 20000);
   }
-  function done() {
-    clearInterval(timer); fill.style.width = '100%';
-    setTimeout(() => { fill.style.width = '0'; }, 400);
-    loading.classList.remove('show'); loadedOnce = true;
-  }
-  function fail() { clearInterval(timer); fill.style.width = '0'; loading.classList.remove('show'); blocked.classList.add('show'); }
-  frame.addEventListener('load', () => { if (frame.src !== 'about:blank' && frame.getAttribute('src') !== 'about:blank') done(); });
-  frame.addEventListener('error', fail);
   $('#reloadBtn').onclick = () => { load(); };
-  $('#retryBtn').onclick = load;
   $('#openSiteBtn').onclick = load;
   $('#backBtn').onclick = () => { history.back(); };     // به صفحه قبلی در تاریخچه‌ی مرورگر برمی‌گردد
-  if (navigator.onLine === false) fail();
-  addEventListener('offline', fail);
-  addEventListener('online', load);
 
   /* ---------- دانلودها ---------- */
   let videos = [];
