@@ -310,6 +310,11 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const fa = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
   const SITE = 'https://biomaze.ir/';   // آدرس قفل‌شده
+  function send(message) {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify(message));
+    }
+  }
 
   /* ---------- اعلان کوتاه ---------- */
   let tt;
@@ -329,7 +334,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
   /* ---------- مرورگر مستقل ---------- */
   function load() {
-    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'open-site', url: SITE }));
+    send({ type: 'open-site', url: SITE });
   }
   $('#reloadBtn').onclick = () => { load(); };
   $('#openSiteBtn').onclick = load;
@@ -337,7 +342,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
   /* ---------- دانلودها ---------- */
   let videos = [];
-  function requestFiles() { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'list-files' })); }
+  function requestFiles() { send({ type: 'list-files' }); }
   function receiveFiles(list) { videos = Array.isArray(list) ? list : []; renderList(); }
   window.receiveFiles = receiveFiles;
   const norm = s => s.replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase();
@@ -365,7 +370,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   function openVideo(id) {
     const v = videos.find(x => x.id === id); if (!v) return;
     $('#playerTitle').textContent = v.name;
-    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'open-file', id: v.id }));
+    send({ type: 'open-file', id: v.id });
   }
   $('#closePlayer').onclick = () => { $('#video').pause(); $('#player').classList.remove('show'); };
 
@@ -390,12 +395,12 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
     }
     if (b.dataset.act === 'saveName') {
       const n = $('#newName').value.trim(); if (!n) return toast('نام نمی‌تواند خالی باشد');
-      v.name = n; hideSheet(); window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'rename-file', id, name: n }));
+      v.name = n; hideSheet(); send({ type: 'rename-file', id, name: n });
     }
     if (b.dataset.act === 'delete') {
       showSheet(\`<h3>حذف فایل</h3><p class="p">«\${v.name.replace(/</g,'&lt;')}» برای همیشه حذف شود؟</p><div class="btns"><button class="btn ghost" data-act="cancel">لغو</button><button class="btn red" data-act="confirmDel" data-id="\${id}">حذف</button></div>\`);
     }
-    if (b.dataset.act === 'confirmDel') { hideSheet(); window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'delete-file', id })); }
+    if (b.dataset.act === 'confirmDel') { hideSheet(); send({ type: 'delete-file', id }); }
     if (b.dataset.act === 'cancel') hideSheet();
   });
   sheet.addEventListener('keydown', e => { if (e.key === 'Enter' && $('#newName')) $('[data-act="saveName"]').click(); });
@@ -413,14 +418,14 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
     try { localStorage.setItem('theme', t); } catch (e) {}
   }
   let saved = 'auto'; try { saved = localStorage.getItem('theme') || 'auto'; } catch (e) {}
-  applyTheme(saved); mq.addEventListener?.('change', () => { if ($('#themeSeg .on').dataset.t === 'auto') applyTheme('auto'); });
+  applyTheme(saved); if (mq.addEventListener) mq.addEventListener('change', () => { if ($('#themeSeg .on').dataset.t === 'auto') applyTheme('auto'); });
   $$('#themeSeg button').forEach(b => b.onclick = () => applyTheme(b.dataset.t));
   $$('#fontSeg button').forEach(b => b.onclick = () => {
     $$('#fontSeg button').forEach(x => x.classList.toggle('on', x === b));
     document.body.style.fontSize = b.dataset.s + 'px';
   });
-  $('#clearCache').onclick = () => { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'clear-cache' })); toast('حافظه نهان پاک شد'); };
-  $('#clearHist').onclick = () => { window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'clear-history' })); toast('تاریخچه پاک شد'); };
+  $('#clearCache').onclick = () => { send({ type: 'clear-cache' }); toast('حافظه نهان پاک شد'); };
+  $('#clearHist').onclick = () => { send({ type: 'clear-history' }); toast('تاریخچه پاک شد'); };
 </script>
 </body>
 </html>
