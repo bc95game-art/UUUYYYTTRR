@@ -156,8 +156,8 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .foot { text-align: center; font-size: 12px; color: var(--hint); }
 
   /* ---------- نوار پایین ---------- */
-  .nav { position: absolute; inset-inline: 0; bottom: 0; z-index: 20; padding: 8px 12px max(14px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
-  .nav > * { pointer-events: auto; }
+  .nav { position: absolute; inset-inline: 0; bottom: 0; z-index: 20; padding: 8px 12px max(14px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: auto; touch-action: manipulation; }
+  .nav > * { pointer-events: auto; touch-action: manipulation; }
   .nav::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, var(--bg) 40%, transparent); }
   .glass { background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--separator); box-shadow: var(--nav-shadow); border-radius: 99px; }
   .round-btn { width: 62px; height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--hint); font-size: 21px; transition: transform .15s, color .2s, background .2s; }
@@ -320,6 +320,15 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   let tt;
   function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2000); }
 
+  /* WebViewهای اندروید گاهی click را با تأخیر یا دوبار ارسال می‌کنند. */
+  function tap(el, fn) {
+    if (!el) return;
+    let last = 0;
+    const run = e => { const now = Date.now(); if (now - last < 350) return; last = now; fn(e); };
+    el.addEventListener('click', run);
+    el.addEventListener('touchend', e => { e.preventDefault(); run(e); }, { passive: false });
+  }
+
   /* ---------- ناوبری ---------- */
   function go(page) {
     $$('.page').forEach(p => p.classList.toggle('active', p.id === page));
@@ -330,15 +339,15 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
     $('#bell').classList.toggle('active', page === 'notifs');
     $('#screen').scrollTo({ top: 0 });
   }
-  $$('.tab, #bell').forEach(b => b.addEventListener('click', () => go(b.dataset.page)));
+  $$('.tab, #bell').forEach(b => tap(b, () => go(b.dataset.page)));
 
   /* ---------- مرورگر مستقل ---------- */
   function load() {
     send({ type: 'open-site', url: SITE });
   }
-  $('#reloadBtn').onclick = () => { load(); };
-  $('#openSiteBtn').onclick = load;
-  $('#backBtn').onclick = () => { history.back(); };     // به صفحه قبلی در تاریخچه‌ی مرورگر برمی‌گردد
+  tap($('#reloadBtn'), load);
+  tap($('#openSiteBtn'), load);
+  tap($('#backBtn'), () => { history.back(); });     // به صفحه قبلی در تاریخچه‌ی مرورگر برمی‌گردد
 
   /* ---------- دانلودها ---------- */
   let videos = [];
@@ -360,7 +369,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
       : \`<div class="empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>\${q ? 'فایلی با این نام پیدا نشد' : 'هنوز فایلی دانلود نشده است'}</div>\`;
   }
   $('#q').addEventListener('input', renderList);
-  $('#clearQ').onclick = e => { e.preventDefault(); $('#q').value = ''; renderList(); $('#q').focus(); };
+  tap($('#clearQ'), e => { e.preventDefault(); $('#q').value = ''; renderList(); $('#q').focus(); });
   $('#list').addEventListener('click', e => {
     const o = e.target.closest('[data-open]'), m = e.target.closest('[data-more]');
     if (o) openVideo(+o.dataset.open); else if (m) openMenu(+m.dataset.more);
@@ -411,7 +420,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
   /* ---------- تنظیمات ---------- */
   const root = document.documentElement;
-  const mq = matchMedia('(prefers-color-scheme: dark)');
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : { matches: false, addEventListener: () => {} };
   function applyTheme(t) {
     root.dataset.theme = t === 'auto' ? (mq.matches ? 'dark' : 'light') : t;
     $$('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
@@ -419,13 +428,13 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   }
   let saved = 'auto'; try { saved = localStorage.getItem('theme') || 'auto'; } catch (e) {}
   applyTheme(saved); if (mq.addEventListener) mq.addEventListener('change', () => { if ($('#themeSeg .on').dataset.t === 'auto') applyTheme('auto'); });
-  $$('#themeSeg button').forEach(b => b.onclick = () => applyTheme(b.dataset.t));
-  $$('#fontSeg button').forEach(b => b.onclick = () => {
+  $$('#themeSeg button').forEach(b => tap(b, () => applyTheme(b.dataset.t)));
+  $$('#fontSeg button').forEach(b => tap(b, () => {
     $$('#fontSeg button').forEach(x => x.classList.toggle('on', x === b));
     document.body.style.fontSize = b.dataset.s + 'px';
-  });
-  $('#clearCache').onclick = () => { send({ type: 'clear-cache' }); toast('حافظه نهان پاک شد'); };
-  $('#clearHist').onclick = () => { send({ type: 'clear-history' }); toast('تاریخچه پاک شد'); };
+  }));
+  tap($('#clearCache'), () => { send({ type: 'clear-cache' }); toast('حافظه نهان پاک شد'); });
+  tap($('#clearHist'), () => { send({ type: 'clear-history' }); toast('تاریخچه پاک شد'); });
 </script>
 </body>
 </html>
