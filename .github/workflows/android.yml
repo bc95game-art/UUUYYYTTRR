@@ -38,6 +38,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -88,7 +90,16 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --stacktrace assembleRelease 2>&1 | tee ../gradle-build.log
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --refresh-dependencies --stacktrace assembleRelease 2>&1 | tee ../gradle-build.log; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Gradle dependency/build attempt $attempt failed; retrying after Maven backoff..." >&2
+              sleep $((attempt * 20))
+            fi
+          done
+          exit 1
 
       - name: Verify APK structure and signature
         run: |
