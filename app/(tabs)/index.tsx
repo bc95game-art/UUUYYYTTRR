@@ -9,6 +9,13 @@ import { PANEL_HTML } from "@/lib/panel-html";
 
 const SITE = "https://biomaze.ir/";
 const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
+const BROWSER_BRIDGE_JS = `(function(){
+  function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
+  document.addEventListener('click',function(e){
+    var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;
+    if(a&&a.href)send({type:'download-url',url:a.href,name:a.getAttribute('download')||''});
+  },true);
+})(); true;`;
 const PANEL_FALLBACK_JS = `(function(){
   function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
   function go(page){
@@ -80,24 +87,10 @@ export default function HomeScreen() {
     void sendFiles();
   }, [sendFiles]);
 
-  const onMessage = useCallback(async (event: WebViewMessageEvent) => {
-    let message: { type?: string; url?: string; id?: number; name?: string } = {};
-    try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
-    if (message.type === "open-site") { setBrowserUrl(message.url || SITE); setMode("browser"); return; }
-    if (message.type === "list-files") { await sendFiles(); return; }
-    if (message.type === "open-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) { setActiveFile(file); setMode("player"); } return; }
-    if (message.type === "delete-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) await FileSystem.deleteAsync(file.uri, { idempotent: true }); await sendFiles(); return; }
-    if (message.type === "rename-file" && message.id && message.name?.trim()) { const file = files.find((x) => x.id === message.id); if (file) { const safe = message.name.trim().replace(/[\\/:*?"<>|]/g, "_"); await FileSystem.moveAsync({ from: file.uri, to: `${OFFLINE_DIR}${safe}` }).catch(() => undefined); } await sendFiles(); return; }
-    if (message.type === "clear-cache") { await FileSystem.deleteAsync(FileSystem.cacheDirectory ?? "", { idempotent: true }).catch(() => undefined); return; }
-    if (message.type === "clear-history") { webRef.current?.clearHistory?.(); }
-  }, [files, sendFiles]);
-
-  const onBrowserNavigation = (nav: WebViewNavigation) => { setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
-  const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => {
-    const url = event.nativeEvent.downloadUrl;
+  const downloadVideo = useCallback(async (url: string, nameHint?: string) => {
     if (!url || !FileSystem.documentDirectory) return;
     await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-    let raw = url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`;
+    let raw = nameHint || url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`;
     try { raw = decodeURIComponent(raw); } catch { /* نام رمزگذاری‌شدهٔ خراب را پاک‌سازی می‌کنیم */ }
     let clean = raw.replace(/[^\p{L}\p{N}._-]/gu, "_") || `biomaze-${Date.now()}.mp4`;
     if (!/\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)$/i.test(clean)) clean += ".mp4";
@@ -108,12 +101,32 @@ export default function HomeScreen() {
     let suffix = 1;
     while (existing.includes(candidate)) candidate = `${stem} (${suffix++})${extension}`;
     const target = `${OFFLINE_DIR}${candidate}`;
-    await FileSystem.downloadAsync(url, target).then(() => refreshFiles()).catch(() => setUiError("دانلود ویدئو انجام نشد. ممکن است سایت فایل را فقط در حافظهٔ داخلی WebView نگه‌داری کند."));
+    await FileSystem.downloadAsync(url, target).then(async () => {
+      const info = await FileSystem.getInfoAsync(target).catch(() => ({ exists: false }));
+      if (!info.exists || !("size" in info) || !info.size) throw new Error("empty download");
+      await refreshFiles();
+    }).catch(() => setUiError("دانلود ویدئو انجام نشد. اتصال یا دسترسی فایل را بررسی کنید."));
   }, [refreshFiles]);
+
+  const onMessage = useCallback(async (event: WebViewMessageEvent) => {
+    let message: { type?: string; url?: string; id?: number; name?: string } = {};
+    try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
+    if (message.type === "open-site") { setBrowserUrl(message.url || SITE); setMode("browser"); return; }
+    if (message.type === "download-url" && message.url) { await downloadVideo(message.url, message.name); return; }
+    if (message.type === "list-files") { await sendFiles(); return; }
+    if (message.type === "open-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) { setActiveFile(file); setMode("player"); } return; }
+    if (message.type === "delete-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) await FileSystem.deleteAsync(file.uri, { idempotent: true }); await sendFiles(); return; }
+    if (message.type === "rename-file" && message.id && message.name?.trim()) { const file = files.find((x) => x.id === message.id); if (file) { const typed = message.name.trim().replace(/[\\/:*?"<>|]/g, "_"); const oldExt = file.name.match(/\.[^.]+$/)?.[0] ?? ".mp4"; const safe = /\.[A-Za-z0-9]{2,5}$/.test(typed) ? typed : `${typed}${oldExt}`; await FileSystem.moveAsync({ from: file.uri, to: `${OFFLINE_DIR}${safe}` }).catch(() => undefined); } await sendFiles(); return; }
+  }, [downloadVideo, files, sendFiles]);
+
+  const onBrowserNavigation = (nav: WebViewNavigation) => { setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
+  const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => {
+    await downloadVideo(event.nativeEvent.downloadUrl);
+  }, [downloadVideo]);
 
   const header = <SafeAreaView edges={["top"]} style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-forward" size={23} color="#fff" /></Pressable><Text style={styles.headerTitle} numberOfLines={1}>{browserTitle}</Text><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#fff" /></Pressable></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
+  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS)} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ html: PANEL_HTML, baseUrl: SITE }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }

@@ -53,7 +53,8 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .screen::-webkit-scrollbar { display: none; }
   .page { display: none; flex-direction: column; gap: 14px; min-height: 100%; animation: fade .3s ease both; }
   .page.active { display: flex; }
-  #home.page { height: 100%; min-height: 0; }
+  #home.page { height: 100%; min-height: 0; justify-content: center; }
+  #home .welcome { width: 100%; min-height: 420px; background: linear-gradient(145deg, rgba(29,143,208,.20), rgba(22,191,109,.18) 55%, var(--section)); border: 1px solid rgba(29,143,208,.18); }
   @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
   .card { background: var(--section); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; transition: background .3s; }
@@ -123,10 +124,20 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .more:active { background: var(--separator); }
   .empty { margin: auto; text-align: center; color: var(--hint); font-size: 13.5px; padding: 28px 10px; line-height: 2; }
   .empty svg { font-size: 40px; display: block; margin: 0 auto 6px; opacity: .6; }
+  .stats { min-height: 72px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-around; text-align: center; }
+  .stats div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .stats b { font-size: 17px; color: var(--accent); }
+  .stats span { color: var(--hint); font-size: 11.5px; }
+  .stats i { color: var(--separator); font-style: normal; font-size: 24px; }
 
   /* ---------- اعلان‌ها ---------- */
   #notifs .empty-full { margin: auto; text-align: center; color: var(--hint); font-size: 14px; }
   #notifs .empty-full svg { font-size: 54px; opacity: .35; display: block; margin: 0 auto 10px; }
+  .notice-card { margin: auto; width: 100%; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 28px; background: linear-gradient(145deg, rgba(123,92,240,.16), rgba(29,143,208,.12), var(--section)); }
+  .notice-icon { width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center; color: var(--purple); background: rgba(123,92,240,.14); }
+  .notice-icon svg { width: 42px; height: 42px; }
+  .notice-card h1 { font-size: 19px; }
+  .notice-card p { color: var(--hint); font-size: 13.5px; line-height: 1.9; }
 
   /* ---------- تنظیمات ---------- */
   .section-head { padding: 0 12px 7px; font-size: 13px; font-weight: 700; color: var(--hint); }
@@ -215,20 +226,11 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
 
     <!-- ===== خانه: مرورگر مستقل ===== -->
     <section class="page active" id="home">
-      <div class="toolbar">
-        <button class="icon-btn" id="backBtn" aria-label="بازگشت به صفحه قبل"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <div class="address" title="آدرس قفل شده است">
-          <svg class="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
-          <div class="url"><span>https://</span>biomaze.ir<span>/</span></div>
-          <i class="fixed" style="font-style:normal">قفل</i>
-        </div>
-        <button class="icon-btn" id="reloadBtn" aria-label="بارگذاری مجدد"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg></button>
-      </div>
       <div class="card welcome" id="browser">
         <div class="welcome-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg></div>
         <h1>ماز ویدیو</h1>
         <p>مرورگر مستقل و کتابخانهٔ ویدئوهای آفلاین</p>
-        <p class="welcome-note">برای ورود به سایت و ذخیرهٔ ویدئو در حافظهٔ همین برنامه، دکمهٔ زیر را بزن.</p>
+        <p class="welcome-note">طراح برنامه : « امیررضا موسوی »</p>
         <button class="btn open-site" id="openSiteBtn">باز کردن سایت</button>
       </div>
     </section>
@@ -244,40 +246,33 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
         <input id="q" type="search" placeholder="جستجوی نام فایل…" autocomplete="off">
         <button class="clear" id="clearQ" aria-label="پاک کردن"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></button>
       </label>
+      <div class="stats card" aria-label="آمار دانلودها">
+        <div><b id="videoCount">۰</b><span>تعداد دانلودها</span></div>
+        <i>|</i>
+        <div><b id="videoSize">۰ مگابایت</b><span>حجم کل ویدیوها</span></div>
+      </div>
       <div class="card list" id="list"></div>
     </section>
 
-    <!-- ===== اعلان‌ها (خالی) ===== -->
-    <section class="page" id="notifs"></section>
+    <!-- ===== اعلان‌ها: صفحهٔ نمایشی ===== -->
+    <section class="page" id="notifs">
+      <div class="card notice-card">
+        <div class="notice-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg></div>
+        <h1>اعلان‌ها</h1>
+        <p>در حال حاضر اعلان جدیدی برای نمایش وجود ندارد.</p>
+      </div>
+    </section>
 
-    <!-- ===== تنظیمات مرورگر ===== -->
+    <!-- ===== تنظیمات ===== -->
     <section class="page" id="settings">
       <div>
-        <div class="section-head">نمایش</div>
+        <div class="section-head">نمایش برنامه</div>
         <div class="card">
-          <div class="row"><span class="ic g-purple"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></span><span class="body"><span class="info"><span class="title">پوسته</span></span>
+          <div class="row"><span class="ic g-purple"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></span><span class="body"><span class="info"><span class="title">پوستهٔ برنامه</span><span class="sub">انتخاب حالت روشن، تاریک یا خودکار</span></span>
             <div class="seg" id="themeSeg"><button data-t="light">روشن</button><button data-t="dark">تاریک</button><button data-t="auto" class="on">خودکار</button></div></span></div>
-          <div class="row"><span class="ic g-blue"><svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span><span class="body"><span class="info"><span class="title">اندازه متن</span></span>
-            <div class="seg" id="fontSeg"><button data-s="14">کوچک</button><button data-s="16" class="on">متوسط</button><button data-s="18">بزرگ</button></div></span></div>
         </div>
       </div>
-      <div>
-        <div class="section-head">مرورگر</div>
-        <div class="card">
-          <div class="row"><span class="ic g-green"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="body"><span class="info"><span class="title">نسخه دسکتاپ</span><span class="sub">نمایش سایت به‌صورت کامپیوتر</span></span><label class="switch"><input type="checkbox" data-pref="desktop"><i></i></label></span></div>
-          <div class="row"><span class="ic g-red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9l14.2 14.2"/></svg></span><span class="body"><span class="info"><span class="title">مسدود کردن پنجره‌های بازشو</span></span><label class="switch"><input type="checkbox" checked data-pref="popups"><i></i></label></span></div>
-          <div class="row"><span class="ic g-orange"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg></span><span class="body"><span class="info"><span class="title">صرفه‌جویی در داده</span></span><label class="switch"><input type="checkbox" data-pref="saver"><i></i></label></span></div>
-          <div class="row"><span class="ic g-blue"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span><span class="body"><span class="info"><span class="title">دانلود خودکار ویدیو</span></span><label class="switch"><input type="checkbox" checked data-pref="autodl"><i></i></label></span></div>
-        </div>
-      </div>
-      <div>
-        <div class="section-head">حریم خصوصی</div>
-        <div class="card">
-          <button class="row" id="clearCache"><span class="ic g-orange"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span><span class="body"><span class="info"><span class="title">پاک کردن حافظه نهان</span></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span></button>
-          <button class="row" id="clearHist"><span class="ic g-red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="body"><span class="info"><span class="title">پاک کردن تاریخچه</span></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></span></button>
-        </div>
-      </div>
-      <p class="foot">نسخه ۱٫۰٫۰</p>
+      <p class="foot">طراح برنامه : « امیررضا موسوی »</p>
     </section>
   </main>
 
@@ -345,9 +340,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   function load() {
     send({ type: 'open-site', url: SITE });
   }
-  tap($('#reloadBtn'), load);
   tap($('#openSiteBtn'), load);
-  tap($('#backBtn'), () => { history.back(); });     // به صفحه قبلی در تاریخچه‌ی مرورگر برمی‌گردد
 
   /* ---------- دانلودها ---------- */
   let videos = [];
@@ -359,7 +352,10 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
     const q = norm($('#q').value.trim());
     $('#searchBox').classList.toggle('has', !!q);
     const shown = videos.filter(v => norm(v.name).includes(q));
+    const totalMb = videos.reduce((sum, v) => sum + (Number(v.size) || 0), 0);
     $('#count').textContent = \`\${fa(videos.length)} ویدیو ذخیره شده\`;
+    $('#videoCount').textContent = fa(videos.length);
+    $('#videoSize').textContent = \`\${fa(totalMb)} مگابایت\`;
     $('#list').innerHTML = shown.length ? shown.map(v => \`
       <div class="video">
         <button class="play" data-open="\${v.id}" aria-label="پخش"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg></button>
@@ -433,8 +429,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
     $$('#fontSeg button').forEach(x => x.classList.toggle('on', x === b));
     document.body.style.fontSize = b.dataset.s + 'px';
   }));
-  tap($('#clearCache'), () => { send({ type: 'clear-cache' }); toast('حافظه نهان پاک شد'); });
-  tap($('#clearHist'), () => { send({ type: 'clear-history' }); toast('تاریخچه پاک شد'); });
+
 </script>
 </body>
 </html>
