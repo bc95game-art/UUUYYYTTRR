@@ -35,22 +35,31 @@ export default function HomeScreen() {
     const videoPattern = /\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)$/i;
     for (const name of names.filter((x) => !x.startsWith(".") && videoPattern.test(x))) {
       const uri = `${OFFLINE_DIR}${name}`;
-      const info = await FileSystem.getInfoAsync(uri);
-      if (!info.exists || info.isDirectory) continue;
+      const info = await FileSystem.getInfoAsync(uri).catch(() => ({ exists: false }));
+      if (!info.exists || ("isDirectory" in info && info.isDirectory)) continue;
       const bytes = "size" in info && typeof info.size === "number" ? info.size : 0;
       output.push({ id: output.length + 1, uri, name, size: Math.max(1, Math.round(bytes / 1024 / 1024)), date: "ذخیره‌شده در این برنامه" });
     }
-    setFiles(output);
     return output;
   }, []);
 
-  useEffect(() => { readFiles(); }, [readFiles]);
+  const refreshFiles = useCallback(async () => {
+    const latest = await readFiles();
+    setFiles(latest);
+    return latest;
+  }, [readFiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readFiles().then((latest) => { if (!cancelled) setFiles(latest); });
+    return () => { cancelled = true; };
+  }, [readFiles]);
   useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { if (mode === "player") { setMode("ui"); return true; } if (mode === "browser" && browserCanGoBack) { webRef.current?.goBack(); return true; } if (mode === "browser") { setMode("ui"); return true; } return false; }); return () => sub.remove(); }, [mode, browserCanGoBack]);
 
   const sendFiles = useCallback(async () => {
-    const latest = await readFiles();
+    const latest = await refreshFiles();
     webRef.current?.injectJavaScript(`window.receiveFiles(${JSON.stringify(latest.map(({ id, name, size, date }) => ({ id, name, size, date })))}); true;`);
-  }, [readFiles]);
+  }, [refreshFiles]);
 
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
     let message: { type?: string; url?: string; id?: number; name?: string } = {};
@@ -69,16 +78,23 @@ export default function HomeScreen() {
     const url = event.nativeEvent.downloadUrl;
     if (!url || !FileSystem.documentDirectory) return;
     await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-    const raw = decodeURIComponent(url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`);
+    let raw = url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`;
+    try { raw = decodeURIComponent(raw); } catch { /* نام رمزگذاری‌شدهٔ خراب را پاک‌سازی می‌کنیم */ }
     let clean = raw.replace(/[^\p{L}\p{N}._-]/gu, "_") || `biomaze-${Date.now()}.mp4`;
     if (!/\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)$/i.test(clean)) clean += ".mp4";
-    const target = `${OFFLINE_DIR}${clean}`;
-    await FileSystem.downloadAsync(url, target).then(() => readFiles()).catch(() => setUiError("دانلود ویدئو انجام نشد. ممکن است سایت فایل را فقط در حافظهٔ داخلی WebView نگه‌داری کند."));
-  }, [readFiles]);
+    const existing = await FileSystem.readDirectoryAsync(OFFLINE_DIR).catch(() => [] as string[]);
+    const extension = clean.match(/\.[^.]+$/)?.[0] ?? ".mp4";
+    const stem = clean.slice(0, -extension.length);
+    let candidate = clean;
+    let suffix = 1;
+    while (existing.includes(candidate)) candidate = `${stem} (${suffix++})${extension}`;
+    const target = `${OFFLINE_DIR}${candidate}`;
+    await FileSystem.downloadAsync(url, target).then(() => refreshFiles()).catch(() => setUiError("دانلود ویدئو انجام نشد. ممکن است سایت فایل را فقط در حافظهٔ داخلی WebView نگه‌داری کند."));
+  }, [refreshFiles]);
 
   const header = <SafeAreaView edges={["top"]} style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-forward" size={23} color="#fff" /></Pressable><Text style={styles.headerTitle} numberOfLines={1}>{browserTitle}</Text><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#fff" /></Pressable></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onFileDownload={onFileDownload} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
+  if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ html: PANEL_HTML, baseUrl: SITE }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess onMessage={onMessage} onLoadEnd={sendFiles} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }
