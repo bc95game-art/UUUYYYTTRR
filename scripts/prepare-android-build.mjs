@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 const path = "android/app/build.gradle";
 let gradle = await readFile(path, "utf8");
 
-if (!gradle.includes("signingConfigs.release")) {
+if (!gradle.includes("storeFile file('mazvideo-release.keystore')")) {
   const marker = "    buildTypes {";
   const block = `    signingConfigs {
         release {
@@ -18,10 +18,17 @@ if (!gradle.includes("signingConfigs.release")) {
   gradle = gradle.replace(marker, `${block}${marker}`);
 }
 
-gradle = gradle.replace(
-  /release\s*\{([\s\S]*?)signingConfig\s+signingConfigs\.debug/,
-  (_match, body) => `release {${body}signingConfig signingConfigs.release`,
-);
+const buildTypesStart = gradle.indexOf("    buildTypes {");
+if (buildTypesStart < 0) throw new Error("Could not locate buildTypes block");
+const beforeBuildTypes = gradle.slice(0, buildTypesStart);
+const buildTypes = gradle.slice(buildTypesStart);
+const buildTypesRelease = /(\n\s{8}release\s*\{)([\s\S]*?)(\n\s{8}\})/;
+if (!buildTypesRelease.test(buildTypes)) throw new Error("Could not locate buildTypes.release block");
+const patchedBuildTypes = buildTypes.replace(buildTypesRelease, (_match, start, body, end) => {
+  const withoutSigning = body.replace(/^\s*signingConfig\s+signingConfigs\.[A-Za-z0-9_]+\s*$/m, "");
+  return `${start}${withoutSigning}\n            signingConfig signingConfigs.release${end}`;
+});
+gradle = beforeBuildTypes + patchedBuildTypes;
 
 if (!gradle.includes("storeFile file('mazvideo-release.keystore')")) {
   throw new Error("Release keystore file is not configured");
