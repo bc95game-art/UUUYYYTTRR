@@ -9,6 +9,21 @@ import { PANEL_HTML } from "@/lib/panel-html";
 
 const SITE = "https://biomaze.ir/";
 const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
+const PANEL_FALLBACK_JS = `(function(){
+  function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
+  function go(page){
+    var pages=document.querySelectorAll('.page'); for(var i=0;i<pages.length;i++) pages[i].classList.toggle('active',pages[i].id===page);
+    var tabs=document.querySelectorAll('.tab'); for(var j=0;j<tabs.length;j++) tabs[j].classList.toggle('active',tabs[j].getAttribute('data-page')===page);
+    var track=document.getElementById('track'), tab=document.querySelector('.tab[data-page="'+page+'"]');
+    if(track&&tab) track.style.setProperty('--i',tab.getAttribute('data-i'));
+    var screen=document.getElementById('screen'); if(screen) screen.scrollTop=0;
+  }
+  var tabs=document.querySelectorAll('.tab,#bell'); for(var k=0;k<tabs.length;k++) tabs[k].onclick=function(e){if(e)e.preventDefault();go(this.getAttribute('data-page'));};
+  var open=document.getElementById('openSiteBtn'), reload=document.getElementById('reloadBtn');
+  if(open) open.onclick=function(){send({type:'open-site',url:'${SITE}'});};
+  if(reload) reload.onclick=function(){send({type:'open-site',url:'${SITE}'});};
+  var back=document.getElementById('backBtn'); if(back) back.onclick=function(){if(window.history)window.history.back();};
+})(); true;`;
 type OfflineFile = { id: number; uri: string; name: string; size: number; date: string };
 type Mode = "ui" | "browser" | "player";
 
@@ -60,6 +75,10 @@ export default function HomeScreen() {
     const latest = await refreshFiles();
     webRef.current?.injectJavaScript(`window.receiveFiles(${JSON.stringify(latest.map(({ id, name, size, date }) => ({ id, name, size, date })))}); true;`);
   }, [refreshFiles]);
+  const onPanelLoad = useCallback(() => {
+    webRef.current?.injectJavaScript(PANEL_FALLBACK_JS);
+    void sendFiles();
+  }, [sendFiles]);
 
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
     let message: { type?: string; url?: string; id?: number; name?: string } = {};
@@ -96,7 +115,7 @@ export default function HomeScreen() {
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
   if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
-  return <View style={styles.root}><WebView ref={webRef} source={{ html: PANEL_HTML, baseUrl: SITE }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess onMessage={onMessage} onLoadEnd={sendFiles} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
+  return <View style={styles.root}><WebView ref={webRef} source={{ html: PANEL_HTML, baseUrl: SITE }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }
 
 const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#0d1620" }, browser: { flex: 1, backgroundColor: "#0d1620" }, nativeHeader: { minHeight: 58, backgroundColor: "#0d1620", flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 10, gap: 10 }, headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#1d8fd0" }, headerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "center" }, loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1620", gap: 12, padding: 24 }, loaderText: { color: "#fff", fontSize: 13, textAlign: "center" }, errorTitle: { color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }, retry: { backgroundColor: "#1d8fd0", borderRadius: 22, paddingHorizontal: 26, paddingVertical: 12 }, retryText: { color: "#fff", fontWeight: "700" }, player: { flex: 1, backgroundColor: "#000" }, playerBar: { minHeight: 58, backgroundColor: "#000", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 10 }, close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" }, playerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" }, video: { flex: 1, width: "100%" } });
