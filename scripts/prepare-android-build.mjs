@@ -23,5 +23,12 @@ gradle = gradle.replace(
   (_match, body) => `release {${body}signingConfig signingConfigs.release`,
 );
 
+if (!gradle.includes("storeFile file('mazvideo-release.keystore')")) {
+  throw new Error("Release keystore file is not configured");
+}
+if (!gradle.includes("signingConfig signingConfigs.release")) {
+  throw new Error("Release build is not configured to use signingConfigs.release");
+}
+
 await writeFile(path, gradle);
 console.log("Configured release signing from GitHub Actions secrets.");

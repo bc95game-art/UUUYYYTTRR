@@ -76,7 +76,9 @@ jobs:
           set -euo pipefail
           printf '%s' "$KEYSTORE_B64" | base64 --decode > android/app/mazvideo-release.keystore
           chmod 600 android/app/mazvideo-release.keystore
+          keytool -list -keystore android/app/mazvideo-release.keystore -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
           node scripts/prepare-android-build.mjs
+          grep -q "signingConfig signingConfigs.release" android/app/build.gradle
 
       - name: Assemble release APK
         env:
@@ -102,6 +104,7 @@ jobs:
           APK=android/app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
           apksigner verify --verbose --print-certs "$APK" | tee apk-signature.txt
+          grep -q "Signer #1 certificate SHA-256 digest: 13:8B:81:24:CC:3F:CC:62:C7:4F:A7:9E:49:55:B1:EB:28:0E:09:16:2A:51:1C:21:95:D4:24:CA:2F:E6:D7:A7" apk-signature.txt
           zipalign -c -v 4 "$APK" | tail -1
           aapt dump badging "$APK" | grep -E "package:|sdkVersion|targetSdkVersion|application-label" | head -5
           sha256sum "$APK" | tee apk-sha256.txt
