@@ -6,6 +6,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { useVideoPlayer, VideoView } from "expo-video";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
+import { strToU8, zipSync } from "fflate";
 
 const SITE = "https://biomaze.ir/";
 const PANEL_URI = "file:///android_asset/panel-5.html";
@@ -169,6 +170,33 @@ export default function HomeScreen() {
     }).catch(() => setUiError("دانلود ویدئو انجام نشد. اتصال یا دسترسی فایل را بررسی کنید."));
   }, [pushFilesToPanel, refreshFiles]);
 
+  const toBase64 = (bytes: Uint8Array) => {
+    let binary = "";
+    const step = 0x8000;
+    for (let i = 0; i < bytes.length; i += step) binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + step, bytes.length)));
+    return btoa(binary);
+  };
+  const reportZipBytes = (report: string) => {
+    let parsed: Record<string, unknown> = {};
+    try { parsed = JSON.parse(report); } catch { parsed = { raw: report }; }
+    const files: Record<string, Uint8Array> = {
+      "README-fa.txt": strToU8("این بسته فقط شامل داده‌های واقعی بازگردانده‌شده از WebView سایت biomaze.ir است. هر روش ناموفق با خطای واقعی خودش ثبت شده و دادهٔ حدسی اضافه نشده است.\n"),
+      "report.json": strToU8(JSON.stringify(parsed, null, 2)),
+      "summary.txt": strToU8(JSON.stringify({ generatedAt: parsed.generatedAt, page: parsed.page, capabilities: parsed.capabilities, methodStatus: { indexedDB: Array.isArray((parsed.storage as any)?.indexedDB) ? "collected" : "failed-or-unavailable", cache: Array.isArray((parsed.storage as any)?.cache) ? "collected" : "failed-or-unavailable", serviceWorkers: Array.isArray((parsed.storage as any)?.serviceWorkers) ? "collected" : "failed-or-unavailable", localStorage: Array.isArray((parsed.storage as any)?.localStorage) ? "collected" : "failed-or-unavailable", sessionStorage: Array.isArray((parsed.storage as any)?.sessionStorage) ? "collected" : "failed-or-unavailable", media: Array.isArray((parsed.media as any)?.elements) ? "collected" : "failed-or-unavailable", performance: Array.isArray((parsed.media as any)?.performance) ? "collected" : "failed-or-unavailable" } }, null, 2)),
+    };
+    const storage = (parsed.storage || {}) as Record<string, unknown>;
+    const media = (parsed.media || {}) as Record<string, unknown>;
+    for (const [name, value] of Object.entries({
+      "indexeddb.json": storage.indexedDB,
+      "cache-api.json": storage.cache,
+      "service-workers.json": storage.serviceWorkers,
+      "local-storage.json": storage.localStorage,
+      "session-storage.json": storage.sessionStorage,
+      "media-elements.json": media.elements,
+      "performance-resources.json": media.performance,
+    })) files[`sources/${name}`] = strToU8(JSON.stringify(value ?? { error: "unavailable" }, null, 2));
+    return zipSync(files, { level: 6 });
+  };
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
     let message: { type?: string; url?: string; id?: number; name?: string; mime?: string; transferId?: string; index?: number; total?: number; data?: string; report?: string } = {};
     try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
@@ -191,24 +219,34 @@ export default function HomeScreen() {
     }
     if (message.type === "offline-report-request") {
       reportRequested.current = true; setIsReportRunning(true); setBrowserUrl(SITE); setMode("browser");
-      setTimeout(() => { if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportForPanel.current = { name: `mazvideo-report-timeout-${Date.now()}.json`, report: JSON.stringify({ generatedAt: new Date().toISOString(), error: "native-report-timeout", message: "WebView did not return a report before timeout", site: SITE }, null, 2) }; setMode("ui"); } }, 20000);
+      setTimeout(() => { if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "استخراج گزارش از حافظهٔ سایت در مهلت تعیین‌شده کامل نشد؛ هیچ گزارش ساختگی ایجاد نشد. دوباره تلاش کنید."; setMode("ui"); } }, 45000);
       return;
     }
-    if (message.type === "offline-report-result" && message.report && FileSystem.documentDirectory) {
+    if (message.type === "offline-report-result" && message.report) {
+      let parsed: { error?: string; message?: string } = {};
+      try { parsed = JSON.parse(message.report); } catch { parsed = { error: "invalid-report", message: "گزارش دریافتی معتبر نبود." }; }
+      if (parsed.error) {
+        reportRequested.current = false; setIsReportRunning(false);
+        reportErrorForPanel.current = parsed.message || "استخراج گزارش واقعی ناموفق بود.";
+        setMode("ui");
+        return;
+      }
       const reportName = `mazvideo-offline-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-      const reportUri = `${OFFLINE_DIR}${reportName}`;
-      await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-      await FileSystem.writeAsStringAsync(reportUri, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => { reportForPanel.current = { report: message.report!, name: reportName }; reportRequested.current = false; setIsReportRunning(false); setMode("ui"); }).catch(() => undefined);
+      reportForPanel.current = { report: message.report, name: reportName };
+      reportRequested.current = false; setIsReportRunning(false); setMode("ui");
       return;
     }
-    if (message.type === "share-report" && message.report) {
-      await Share.share({ title: "گزارش ذخیره‌سازی آفلاین ماز ویدیو", message: message.report }).catch(() => undefined);
+    if (message.type === "share-report" && message.report && FileSystem.documentDirectory) {
+      const zipName = (message.name || `mazvideo-offline-report-${Date.now()}.zip`).replace(/\.json$/i, ".zip");
+      const zipUri = `${OFFLINE_DIR}${zipName}`;
+      await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
+      await FileSystem.writeAsStringAsync(zipUri, toBase64(reportZipBytes(message.report)), { encoding: FileSystem.EncodingType.Base64 }).then(() => Share.share({ title: "گزارش ZIP ذخیره‌سازی آفلاین ماز ویدیو", message: "گزارش چندمنبعی ZIP آماده است.", url: zipUri })).catch(() => undefined);
       return;
     }
     if (message.type === "save-report" && message.report && FileSystem.documentDirectory) {
-      const reportName = message.name || `mazvideo-offline-report-${Date.now()}.json`;
+      const reportName = (message.name || `mazvideo-offline-report-${Date.now()}.zip`).replace(/\.json$/i, ".zip");
       await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-      await FileSystem.writeAsStringAsync(`${OFFLINE_DIR}${reportName}`, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportSaved && window.receiveReportSaved(${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
+      await FileSystem.writeAsStringAsync(`${OFFLINE_DIR}${reportName}`, toBase64(reportZipBytes(message.report)), { encoding: FileSystem.EncodingType.Base64 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportSaved && window.receiveReportSaved(${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
       return;
     }
     if (message.type === "list-files") { await sendFiles(); return; }
@@ -225,7 +263,7 @@ export default function HomeScreen() {
   const address = (browserUrl.replace(/^https?:\/\//, "").split("/")[0] || browserTitle || "biomaze.ir").toLowerCase();
   const header = <SafeAreaView edges={["top"]} style={styles.headerSafe}><View style={styles.nativeHeader}><Pressable disabled={isReportRunning} onPress={() => { if (!isReportRunning) setMode("ui"); }} style={[styles.headerButton, isReportRunning && styles.disabledButton]}><MaterialIcons name="arrow-back" size={23} color="#18212b" /></Pressable><LinearGradient colors={["#14897F", "#3388FF", "#7B5CF0", "#E8557A"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.addressBar}><View style={styles.addressContent}><MaterialIcons name="lock" size={19} color="#fff" /><Text style={styles.addressText} numberOfLines={1}>{isReportRunning ? "در حال استخراج گزارش…" : address}</Text></View></LinearGradient><Pressable disabled={isReportRunning} onPress={() => webRef.current?.reload()} style={[styles.headerButton, isReportRunning && styles.disabledButton]}><MaterialIcons name="refresh" size={22} color="#18212b" /></Pressable></View></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS); if (reportRequested.current) setTimeout(() => webRef.current?.injectJavaScript("window.__mazCollectOfflineReport ? window.__mazCollectOfflineReport() : setTimeout(function(){window.__mazCollectOfflineReport&&window.__mazCollectOfflineReport()},1000); true;"), 700); }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش بارگذاری نشد."; setMode("ui"); } else { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); } }} onHttpError={() => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش پاسخ مناسبی نداد."; setMode("ui"); } else { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); } }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View>{isReportRunning && <View pointerEvents="none" style={styles.reportStatus}><ActivityIndicator size="small" color="#fff" /><Text style={styles.reportStatusText}>در حال استخراج گزارش از حافظهٔ سایت…</Text></View>}</View></View></View>;
+  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); const trigger = `${BROWSER_BRIDGE_JS}\ntry { if (window.__mazCollectOfflineReport) window.__mazCollectOfflineReport(); } catch (_) {} true;`; webRef.current?.injectJavaScript(trigger); if (reportRequested.current) { let attempt = 0; const retry = () => { if (!reportRequested.current || attempt++ >= 15) return; webRef.current?.injectJavaScript("try { if (window.__mazCollectOfflineReport) window.__mazCollectOfflineReport(); } catch (_) {} true;"); setTimeout(retry, 1800); }; setTimeout(retry, 500); } }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش بارگذاری نشد."; setMode("ui"); } else { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); } }} onHttpError={() => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش پاسخ مناسبی نداد."; setMode("ui"); } else { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); } }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View>{isReportRunning && <View pointerEvents="none" style={styles.reportStatus}><ActivityIndicator size="small" color="#fff" /><Text style={styles.reportStatusText}>در حال استخراج گزارش از حافظهٔ سایت…</Text></View>}</View></View></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }

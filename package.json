@@ -48,6 +48,7 @@
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
     "express": "^4.22.1",
+    "fflate": "^0.8.2",
     "jose": "6.1.0",
     "mysql2": "^3.16.0",
     "nativewind": "^4.2.1",

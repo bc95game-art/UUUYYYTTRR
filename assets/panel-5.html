@@ -261,8 +261,8 @@
         <div><b id="videoSize">0 MB</b><span class="metric-label"><svg class="metric-icon storage" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg> حجم کل ویدیوها</span></div>
       </div>
       <div class="card list" id="list"></div>
-      <button class="btn report-btn" id="reportBtn">⌁ استخراج گزارش فنی</button>
-      <div class="report-note">این گزینه موقت است و گزارش روش ذخیره‌سازی ویدئوی آفلاین را در حافظهٔ برنامه ذخیره می‌کند.</div>
+      <button class="btn report-btn" id="reportBtn">⌁ استخراج گزارش ZIP چندمنبعی</button>
+      <div class="report-note">این گزینه موقت است و یک بستهٔ ZIP شامل خروجی چند روش واقعی ذخیره‌سازی را آماده می‌کند.</div>
     </section>
 
     <!-- ===== اعلان‌ها: صفحهٔ نمایشی ===== -->
@@ -422,7 +422,7 @@
   requestFiles();
   tap($('#reportBtn'), () => { toast('در حال استخراج گزارش…'); send({ type: 'offline-report-request' }); });
   function receiveReportReady(report, name) {
-    showSheet(`<h3>گزارش آماده شد</h3><p class="p">گزارش از حافظهٔ سایت استخراج شد. یکی از گزینه‌های زیر را انتخاب کنید.</p><textarea class="report-area" id="reportText" readonly></textarea><div class="btns"><button class="btn" id="shareReport">اشتراک‌گذاری</button><button class="btn" id="copyReport">کپی</button><button class="btn" id="saveReport">ذخیره در دانلودها</button></div><button class="btn ghost" data-act="cancel" style="width:100%;margin-top:10px">بستن</button>`);
+    showSheet(`<h3>گزارش ZIP آماده شد</h3><p class="p">گزارش چندمنبعی از حافظهٔ سایت استخراج شد و با یکی از گزینه‌های زیر دریافت می‌شود.</p><textarea class="report-area" id="reportText" readonly></textarea><div class="btns"><button class="btn" id="shareReport">اشتراک‌گذاری</button><button class="btn" id="copyReport">کپی</button><button class="btn" id="saveReport">ذخیره در دانلودها</button></div><button class="btn ghost" data-act="cancel" style="width:100%;margin-top:10px">بستن</button>`);
     $('#reportText').value = report;
     $('#shareReport').onclick = () => send({ type: 'share-report', report });
     $('#saveReport').onclick = () => { send({ type: 'save-report', report, name }); toast('گزارش در دانلودها ذخیره شد'); };
