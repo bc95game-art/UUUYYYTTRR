@@ -40,7 +40,7 @@ const BROWSER_BRIDGE_JS = `(function(){
   function scanCache(){if(!window.caches)return; caches.keys().then(function(keys){keys.forEach(function(k){caches.open(k).then(function(c){return c.keys().then(function(reqs){reqs.forEach(function(req){c.match(req).then(function(r){if(r&&r.blob)r.blob().then(function(b){if((b.type||'').indexOf('video')>=0||looksVideo(req.url))emitBlob(b,videoName(req.url.split('/').pop()),'cache:'+req.url);});});});});}).catch(function(){});});}).catch(function(){});}
   document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;if(a&&a.href)send({type:'download-url',url:a.href,name:a.getAttribute('download')||''});setTimeout(function(){scanIndexedDB();scanCache();},1200);},true);
   function scanAll(){scanIndexedDB();scanCache();}
-  window.__mazCollectOfflineReport=function(){
+  window.__mazCollectOfflineReport=function(){try{
     var report={generatedAt:new Date().toISOString(),page:{url:location.href,title:document.title,readyState:document.readyState},storage:{indexedDB:[],cache:[],serviceWorkers:[],localStorage:[],sessionStorage:[]},media:{elements:[],performance:[]},capabilities:{indexedDB:!!window.indexedDB,caches:!!window.caches,serviceWorker:!!navigator.serviceWorker,opfs:!!(navigator.storage&&navigator.storage.getDirectory),storageEstimate:!!(navigator.storage&&navigator.storage.estimate)}};
     if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(function(x){report.capabilities.estimate=x}).catch(function(){});
     if(navigator.storage&&navigator.storage.persisted)navigator.storage.persisted().then(function(x){report.capabilities.persisted=x}).catch(function(){});
@@ -51,8 +51,8 @@ const BROWSER_BRIDGE_JS = `(function(){
     ['localStorage','sessionStorage'].forEach(function(k){try{var s=window[k];report.storage[k]=Object.keys(s).map(function(n){return {key:n,length:(s.getItem(n)||'').length}})}catch(e){report.storage[k]=[{error:'unavailable'}]}});
     report.media.elements=Array.prototype.map.call(document.querySelectorAll('video,audio,source'),function(el){return {tag:el.tagName,src:el.currentSrc||el.src||el.getAttribute('src')||'',type:el.getAttribute('type')||'',duration:el.duration||null,readyState:el.readyState||0,networkState:el.networkState||0}});
     report.media.performance=performance.getEntriesByType('resource').filter(function(e){return /video|\.mp4|\.m3u8|\.webm|\.m4s|\.ts|blob:/i.test(e.name)}).slice(-300).map(function(e){return {name:e.name,initiatorType:e.initiatorType||'',duration:e.duration||0,transferSize:e.transferSize||0,encodedBodySize:e.encodedBodySize||0}});
-    setTimeout(finish,800);
-  };
+    setTimeout(finish,1500);
+  }catch(e){send({type:'offline-report-result',report:JSON.stringify({generatedAt:new Date().toISOString(),error:'report-collector-exception',message:String(e&&e.message||e),page:{url:location.href,title:document.title},capabilities:{indexedDB:!!window.indexedDB,caches:!!window.caches}})})}};
   setTimeout(scanAll,900);
   setInterval(scanAll,5000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)scanAll();});
@@ -191,7 +191,7 @@ export default function HomeScreen() {
     }
     if (message.type === "offline-report-request") {
       reportRequested.current = true; setIsReportRunning(true); setBrowserUrl(SITE); setMode("browser");
-      setTimeout(() => { if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "استخراج گزارش در زمان تعیین‌شده کامل نشد. دوباره تلاش کنید."; setMode("ui"); } }, 20000);
+      setTimeout(() => { if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportForPanel.current = { name: `mazvideo-report-timeout-${Date.now()}.json`, report: JSON.stringify({ generatedAt: new Date().toISOString(), error: "native-report-timeout", message: "WebView did not return a report before timeout", site: SITE }, null, 2) }; setMode("ui"); } }, 20000);
       return;
     }
     if (message.type === "offline-report-result" && message.report && FileSystem.documentDirectory) {
