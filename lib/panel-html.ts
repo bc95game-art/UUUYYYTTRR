@@ -108,7 +108,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .search input::placeholder { color: var(--hint); }
   .search .clear { font-size: 16px; color: var(--hint); display: none; }
   .search.has .clear { display: block; }
-  .list { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+  .list { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 190px; }
   .video { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 18px; background: var(--fill); animation: fade .3s both; }
   .play {
     width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0; color: #fff; font-size: 22px;
@@ -122,12 +122,15 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   .video .meta { font-size: 12px; color: var(--hint); margin-top: 3px; display: block; }
   .more { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; color: var(--hint); transition: background .2s; }
   .more:active { background: var(--separator); }
-  .empty { margin: auto; text-align: center; color: var(--hint); font-size: 13.5px; padding: 28px 10px; line-height: 2; }
-  .empty svg { font-size: 40px; display: block; margin: 0 auto 6px; opacity: .6; }
+  .empty { flex: 1; min-height: 170px; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--hint); font-size: 14px; padding: 28px 10px; line-height: 2; }
+  .empty svg { width: 42px; height: 42px; display: block; margin: 0 auto 8px; opacity: .6; }
+  .empty-text { display: block; color: var(--hint); font-size: 14px; font-weight: 600; }
   .stats { min-height: 72px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-around; text-align: center; }
   .stats div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
   .stats b { font-size: 17px; color: var(--accent); }
   .stats span { color: var(--hint); font-size: 11.5px; }
+  .metric-label { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+  .metric-emoji { font-size: 17px; line-height: 1; filter: saturate(1.25); }
   .stats i { color: var(--separator); font-style: normal; font-size: 24px; }
 
   /* ---------- اعلان‌ها ---------- */
@@ -247,9 +250,9 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
         <button class="clear" id="clearQ" aria-label="پاک کردن"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></button>
       </label>
       <div class="stats card" aria-label="آمار دانلودها">
-        <div><b id="videoCount">0</b><span>🎬 تعداد دانلودها</span></div>
+        <div><b id="videoCount">0</b><span class="metric-label"><span class="metric-emoji">🎞️</span> تعداد دانلودها</span></div>
         <i>|</i>
-        <div><b id="videoSize">0 MB</b><span>💾 حجم کل ویدیوها</span></div>
+        <div><b id="videoSize">0 MB</b><span class="metric-label"><span class="metric-emoji">💽</span> حجم کل ویدیوها</span></div>
       </div>
       <div class="card list" id="list"></div>
     </section>
@@ -361,7 +364,7 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
         <div class="info" data-open="\${v.id}" style="cursor:pointer"><span class="name">\${v.name.replace(/</g,'&lt;')}</span><span class="meta">\${v.size} MB · \${v.date}</span></div>
         <button class="more" data-more="\${v.id}" aria-label="گزینه‌ها"><svg viewBox="0 0 24 24" style="transform:rotate(90deg)"><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/></svg></button>
       </div>\`).join('')
-      : \`<div class="empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>\${q ? 'فایلی با این نام پیدا نشد' : 'در حال حاضر ویدیویی وجود ندارد'}</div>\`;
+      : \`<div class="empty"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="empty-text">\${q ? 'فایلی با این نام پیدا نشد' : 'در حال حاضر ویدیویی وجود ندارد'}</span></div>\`;
   }
   $('#q').addEventListener('input', renderList);
   tap($('#clearQ'), e => { e.preventDefault(); $('#q').value = ''; renderList(); $('#q').focus(); });
@@ -425,8 +428,8 @@ export const PANEL_HTML = String.raw`<!DOCTYPE html>
   }
   let saved = 'auto'; try { saved = localStorage.getItem('theme') || 'auto'; } catch (e) {}
   applyTheme(saved); if (mq.addEventListener) mq.addEventListener('change', () => { if ($('#themeSeg .on').dataset.t === 'auto') applyTheme('auto'); });
-  $('#themeSeg').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b) { e.preventDefault(); applyTheme(b.dataset.t); } });
-  $('#themeSeg').addEventListener('touchend', e => { const b = e.target.closest('button[data-t]'); if (b) { e.preventDefault(); applyTheme(b.dataset.t); } }, { passive: false });
+  function chooseTheme(e) { const b = e.currentTarget || (e.target && e.target.closest ? e.target.closest('button[data-t]') : null); if (!b) return; if (e.cancelable) e.preventDefault(); applyTheme(b.dataset.t); }
+  $$('#themeSeg button').forEach(b => { b.addEventListener('click', chooseTheme); b.addEventListener('touchend', chooseTheme, { passive: false }); b.addEventListener('pointerup', chooseTheme); });
 
 </script>
 </body>
