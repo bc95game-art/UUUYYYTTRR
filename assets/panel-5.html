@@ -431,6 +431,8 @@
   window.receiveReportReady = receiveReportReady;
   function receiveReportSaved(name) { toast('گزارش ذخیره شد: ' + name); }
   window.receiveReportSaved = receiveReportSaved;
+  function receiveReportError(message) { toast(message || 'استخراج گزارش ناموفق بود'); }
+  window.receiveReportError = receiveReportError;
 
   /* ---------- اعلان‌ها: خالی ---------- */
 
