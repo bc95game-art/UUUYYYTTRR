@@ -180,7 +180,7 @@ export default function HomeScreen() {
       const reportName = `mazvideo-offline-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       const reportUri = `${OFFLINE_DIR}${reportName}`;
       await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-      await FileSystem.writeAsStringAsync(reportUri, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportSaved && window.receiveReportSaved(${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
+      await FileSystem.writeAsStringAsync(reportUri, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportReady && window.receiveReportReady(${JSON.stringify(message.report)},${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
       return;
     }
     if (message.type === "list-files") { await sendFiles(); return; }

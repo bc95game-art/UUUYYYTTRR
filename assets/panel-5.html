@@ -132,6 +132,7 @@
   .stats span { color: var(--hint); font-size: 11.5px; }
   .report-btn { width: 100%; height: 44px; margin-top: -4px; font-size: 13.5px; }
   .report-note { color: var(--hint); font-size: 11px; line-height: 1.8; text-align: center; padding: 0 12px; }
+  .report-area { width: 100%; min-height: 260px; resize: vertical; direction: ltr; text-align: left; border: 1px solid var(--separator); border-radius: 14px; background: var(--fill); color: var(--text); padding: 10px; font: 11px/1.5 monospace; outline: 0; }
   .metric-label { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
   .metric-icon { width: 18px; height: 18px; stroke-width: 2.1; }
   .metric-icon.film { color: #ef7b37; }
@@ -420,8 +421,12 @@
   renderList();
   requestFiles();
   tap($('#reportBtn'), () => { toast('در حال استخراج گزارش…'); send({ type: 'offline-report-request' }); });
-  function receiveReportSaved(name) { toast('گزارش ذخیره شد: ' + name); }
-  window.receiveReportSaved = receiveReportSaved;
+  function receiveReportReady(report, name) {
+    showSheet(`<h3>گزارش ذخیره‌سازی آفلاین</h3><p class="p">فایل گزارش در حافظهٔ برنامه ذخیره شد: ${name}<br>متن زیر را انتخاب و کپی کنید و برای بررسی بفرستید.</p><textarea class="report-area" id="reportText" readonly></textarea><div class="btns"><button class="btn ghost" data-act="cancel">بستن</button><button class="btn" id="copyReport">کپی گزارش</button></div>`);
+    $('#reportText').value = report;
+    $('#copyReport').onclick = async () => { const box = $('#reportText'); box.focus(); box.select(); try { await navigator.clipboard.writeText(report); toast('گزارش کپی شد'); } catch (e) { toast('متن انتخاب شد؛ کپی را از منوی گوشی بزنید'); } };
+  }
+  window.receiveReportReady = receiveReportReady;
 
   /* ---------- اعلان‌ها: خالی ---------- */
 
