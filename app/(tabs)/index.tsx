@@ -65,6 +65,8 @@ const BROWSER_BRIDGE_JS = `(function(){
     Promise.all([collectIndexedDB().then(function(x){if(x!==null){report.storage.indexedDB=x;progress('IndexedDB: نتیجه','ok',x)}}),collectCache().then(function(x){if(x!==null){report.storage.cache=x;progress('Cache API: نتیجه','ok',x)}}),collectServiceWorkers().then(function(x){if(x!==null){report.storage.serviceWorkers=x;progress('Service Worker: نتیجه','ok',x)}}),collectEstimate()]).then(finish).catch(function(e){report.methodErrors.push({method:'collector-finalize',error:String(e&&e.message||e)});finish()});
     setTimeout(finish,12000);
   };
+  window.__mazStartOfflineReport=function(){if(window.__mazReportStarted)return;window.__mazReportStarted=true;try{window.__mazCollectOfflineReport()}catch(e){send({type:'offline-report-result',report:JSON.stringify({generatedAt:new Date().toISOString(),error:'collector-start-failed',message:String(e&&e.message||e),page:{url:location.href,title:document.title,origin:location.origin}})})}};
+  send({type:'offline-report-ready',href:location.href,title:document.title,origin:location.origin});
   setTimeout(scanAll,900);
   setInterval(scanAll,5000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)scanAll();});
@@ -106,6 +108,8 @@ export default function HomeScreen() {
   const [isReportRunning, setIsReportRunning] = useState(false);
   const [reportProgress, setReportProgress] = useState({ total: 31, done: 0, bytes: 0, method: "آماده‌سازی" });
   const reportRequested = useRef(false);
+  const reportStartSent = useRef(false);
+  const reportPageRef = useRef("");
   const reportForPanel = useRef<{ report: string; name: string } | null>(null);
   const reportErrorForPanel = useRef<string | null>(null);
   const transfers = useRef<Record<string, { name: string; mime: string; total: number; chunks: string[] }>>({});
@@ -211,7 +215,7 @@ export default function HomeScreen() {
     return zipSync(files, { level: 6 });
   };
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
-    let message: { type?: string; url?: string; id?: number; name?: string; mime?: string; transferId?: string; index?: number; total?: number; data?: string; report?: string; done?: number; bytes?: number; method?: string } = {};
+    let message: { type?: string; url?: string; id?: number; name?: string; mime?: string; transferId?: string; index?: number; total?: number; data?: string; report?: string; done?: number; bytes?: number; method?: string; href?: string; origin?: string; title?: string } = {};
     try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
     if (message.type === "open-site") { const nextUrl = message.url || SITE; browserUrlRef.current = nextUrl; setBrowserUrl(nextUrl); setMode("browser"); return; }
     if (message.type === "download-url" && message.url) { await downloadVideo(message.url, message.name); return; }
@@ -230,16 +234,26 @@ export default function HomeScreen() {
       }
       return;
     }
+    if (message.type === "offline-report-ready") {
+      if (reportRequested.current && !reportStartSent.current) {
+        reportStartSent.current = true;
+        reportPageRef.current = message.href || browserUrlRef.current || SITE;
+        setReportProgress({ total: 31, done: 0, bytes: 0, method: "صفحه آماده شد؛ شروع استخراج از همان صفحه" });
+        webRef.current?.injectJavaScript("try { if (window.__mazStartOfflineReport) window.__mazStartOfflineReport(); } catch (_) {} true;");
+      }
+      return;
+    }
     if (message.type === "offline-report-progress") {
       setReportProgress({ total: message.total || 24, done: message.done || 0, bytes: message.bytes || 0, method: message.method || "در حال بررسی" });
       return;
     }
     if (message.type === "offline-report-stop") {
+      reportStartSent.current = false;
       webRef.current?.injectJavaScript("try { window.__mazStopOfflineReport && window.__mazStopOfflineReport(); } catch (_) {} true;");
       return;
     }
     if (message.type === "offline-report-request") {
-      reportRequested.current = true; setIsReportRunning(true); setReportProgress({ total: 31, done: 0, bytes: 0, method: "اتصال به صفحهٔ فعلی سایت" }); const currentUrl = browserUrlRef.current || SITE; setBrowserUrl(currentUrl); setMode("browser");
+      reportRequested.current = true; reportStartSent.current = false; reportPageRef.current = ""; setIsReportRunning(true); setReportProgress({ total: 31, done: 0, bytes: 0, method: "اتصال به صفحهٔ فعلی سایت" }); const currentUrl = browserUrlRef.current || SITE; setBrowserUrl(currentUrl); setMode("browser");
       setTimeout(() => { if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "استخراج گزارش از حافظهٔ سایت در مهلت تعیین‌شده کامل نشد؛ هیچ گزارش ساختگی ایجاد نشد. دوباره تلاش کنید."; setMode("ui"); } }, 45000);
       return;
     }
@@ -247,14 +261,14 @@ export default function HomeScreen() {
       let parsed: { error?: string; message?: string } = {};
       try { parsed = JSON.parse(message.report); } catch { parsed = { error: "invalid-report", message: "گزارش دریافتی معتبر نبود." }; }
       if (parsed.error) {
-        reportRequested.current = false; setIsReportRunning(false);
+        reportRequested.current = false; reportStartSent.current = false; setIsReportRunning(false);
         reportErrorForPanel.current = parsed.message || "استخراج گزارش واقعی ناموفق بود.";
         setMode("ui");
         return;
       }
       const reportName = `mazvideo-offline-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       reportForPanel.current = { report: message.report, name: reportName };
-      reportRequested.current = false; setIsReportRunning(false); setMode("ui");
+      reportRequested.current = false; reportStartSent.current = false; setIsReportRunning(false); setMode("ui");
       return;
     }
     if (message.type === "share-report" && message.report && FileSystem.documentDirectory) {
@@ -276,7 +290,7 @@ export default function HomeScreen() {
     if (message.type === "rename-file" && message.id && message.name?.trim()) { const file = files.find((x) => x.id === message.id); if (file) { const typed = message.name.trim().replace(/[\\/:*?"<>|]/g, "_"); const oldExt = file.name.match(/\.[^.]+$/)?.[0] ?? ".mp4"; const safe = /\.[A-Za-z0-9]{2,5}$/.test(typed) ? typed : `${typed}${oldExt}`; await FileSystem.moveAsync({ from: file.uri, to: `${OFFLINE_DIR}${safe}` }).catch(() => undefined); } await sendFiles(); return; }
   }, [downloadVideo, files, pushFilesToPanel, refreshFiles, sendFiles]);
 
-  const onBrowserNavigation = (nav: WebViewNavigation) => { browserUrlRef.current = nav.url || browserUrlRef.current; setBrowserUrl(nav.url || browserUrlRef.current); setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
+  const onBrowserNavigation = (nav: WebViewNavigation) => { const next = nav.url || browserUrlRef.current; if (reportRequested.current && reportStartSent.current && reportPageRef.current && next !== reportPageRef.current) { reportStartSent.current = false; setReportProgress({ total: 31, done: 0, bytes: 0, method: "صفحه تغییر کرد؛ آماده‌سازی صفحهٔ جدید" }); } browserUrlRef.current = next; setBrowserUrl(next); setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || next.replace(/^https?:\/\//, "").split("/")[0]); };
   const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => {
     await downloadVideo(event.nativeEvent.downloadUrl);
   }, [downloadVideo]);
@@ -284,7 +298,7 @@ export default function HomeScreen() {
   const address = (browserUrl.replace(/^https?:\/\//, "").split("/")[0] || browserTitle || "biomaze.ir").toLowerCase();
   const header = <SafeAreaView edges={["top"]} style={styles.headerSafe}><View style={styles.nativeHeader}><Pressable disabled={isReportRunning} onPress={() => { if (!isReportRunning) setMode("ui"); }} style={[styles.headerButton, isReportRunning && styles.disabledButton]}><MaterialIcons name="arrow-back" size={23} color="#18212b" /></Pressable><LinearGradient colors={["#14897F", "#3388FF", "#7B5CF0", "#E8557A"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.addressBar}><View style={styles.addressContent}><MaterialIcons name="lock" size={19} color="#fff" /><Text style={styles.addressText} numberOfLines={1}>{isReportRunning ? "در حال استخراج گزارش…" : address}</Text></View></LinearGradient><Pressable disabled={isReportRunning} onPress={() => webRef.current?.reload()} style={[styles.headerButton, isReportRunning && styles.disabledButton]}><MaterialIcons name="refresh" size={22} color="#18212b" /></Pressable></View></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(`${BROWSER_BRIDGE_JS}\ntrue;`); if (reportRequested.current) { let attempt = 0; const retry = () => { if (!reportRequested.current || attempt++ >= 25) return; webRef.current?.injectJavaScript("try { if (window.__mazCollectOfflineReport) { window.__mazCollectOfflineReport(); } } catch (_) {} true;"); setTimeout(retry, 1600); }; setTimeout(retry, 900); } }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش بارگذاری نشد."; setMode("ui"); } else { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); } }} onHttpError={() => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش پاسخ مناسبی نداد."; setMode("ui"); } else { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); } }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View>{isReportRunning && <View style={styles.reportOverlay}><View style={styles.reportCard}><ActivityIndicator size="large" color="#3388FF" /><Text style={styles.reportTitle}>در حال استخراج اطلاعات بخش‌های پنهان و آشکار مرورگر</Text><Text style={styles.reportMethod}>{reportProgress.method}</Text><Text style={styles.reportStats}>تعداد کل روش‌ها: {reportProgress.total}</Text><Text style={styles.reportStats}>روش‌های امتحان‌شده: {reportProgress.done}</Text><Text style={styles.reportStats}>حجم اطلاعات استخراج‌شده: {(reportProgress.bytes / 1024 / 1024).toFixed(2)} MB</Text><Pressable style={styles.stopReport} onPress={() => webRef.current?.injectJavaScript("try { window.__mazStopOfflineReport && window.__mazStopOfflineReport(); } catch (_) {} true;")}><Text style={styles.stopReportText}>توقف استخراج اطلاعات</Text></Pressable></View></View>}</View></View></View>;
+  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(`${BROWSER_BRIDGE_JS}\ntrue;`); }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش بارگذاری نشد."; setMode("ui"); } else { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); } }} onHttpError={() => { setBrowserLoading(false); if (reportRequested.current) { reportRequested.current = false; setIsReportRunning(false); reportErrorForPanel.current = "سایت برای استخراج گزارش پاسخ مناسبی نداد."; setMode("ui"); } else { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); } }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View>{isReportRunning && <View style={styles.reportOverlay}><View style={styles.reportCard}><ActivityIndicator size="large" color="#3388FF" /><Text style={styles.reportTitle}>در حال استخراج اطلاعات بخش‌های پنهان و آشکار مرورگر</Text><Text style={styles.reportMethod}>{reportProgress.method}</Text><Text style={styles.reportStats}>تعداد کل روش‌ها: {reportProgress.total}</Text><Text style={styles.reportStats}>روش‌های امتحان‌شده: {reportProgress.done}</Text><Text style={styles.reportStats}>حجم اطلاعات استخراج‌شده: {(reportProgress.bytes / 1024 / 1024).toFixed(2)} MB</Text><Pressable style={styles.stopReport} onPress={() => webRef.current?.injectJavaScript("try { window.__mazStopOfflineReport && window.__mazStopOfflineReport(); } catch (_) {} true;")}><Text style={styles.stopReportText}>توقف استخراج اطلاعات</Text></Pressable></View></View>}</View></View></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }
