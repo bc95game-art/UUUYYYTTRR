@@ -130,7 +130,9 @@
   .stats b { font-size: 17px; color: var(--accent); }
   .stats span { color: var(--hint); font-size: 11.5px; }
   .metric-label { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
-  .metric-emoji { font-size: 17px; line-height: 1; filter: saturate(1.25); }
+  .metric-icon { width: 18px; height: 18px; stroke-width: 2.1; }
+  .metric-icon.film { color: #ef7b37; }
+  .metric-icon.storage { color: #247fca; }
   .stats i { color: var(--separator); font-style: normal; font-size: 24px; }
 
   /* ---------- اعلان‌ها ---------- */
@@ -250,9 +252,9 @@
         <button class="clear" id="clearQ" aria-label="پاک کردن"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></button>
       </label>
       <div class="stats card" aria-label="آمار دانلودها">
-        <div><b id="videoCount">0</b><span class="metric-label"><span class="metric-emoji">🎞️</span> تعداد دانلودها</span></div>
+        <div><b id="videoCount">0</b><span class="metric-label"><svg class="metric-icon film" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 5v14M17 5v14M3 9h4M17 9h4M3 15h4M17 15h4"/></svg> تعداد دانلودها</span></div>
         <i>|</i>
-        <div><b id="videoSize">0 MB</b><span class="metric-label"><span class="metric-emoji">💽</span> حجم کل ویدیوها</span></div>
+        <div><b id="videoSize">0 MB</b><span class="metric-label"><svg class="metric-icon storage" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg> حجم کل ویدیوها</span></div>
       </div>
       <div class="card list" id="list"></div>
     </section>
