@@ -422,11 +422,15 @@
   requestFiles();
   tap($('#reportBtn'), () => { toast('در حال استخراج گزارش…'); send({ type: 'offline-report-request' }); });
   function receiveReportReady(report, name) {
-    showSheet(`<h3>گزارش ذخیره‌سازی آفلاین</h3><p class="p">فایل گزارش در حافظهٔ برنامه ذخیره شد: ${name}<br>متن زیر را انتخاب و کپی کنید و برای بررسی بفرستید.</p><textarea class="report-area" id="reportText" readonly></textarea><div class="btns"><button class="btn ghost" data-act="cancel">بستن</button><button class="btn" id="copyReport">کپی گزارش</button></div>`);
+    showSheet(`<h3>گزارش آماده شد</h3><p class="p">گزارش از حافظهٔ سایت استخراج شد. یکی از گزینه‌های زیر را انتخاب کنید.</p><textarea class="report-area" id="reportText" readonly></textarea><div class="btns"><button class="btn" id="shareReport">اشتراک‌گذاری</button><button class="btn" id="copyReport">کپی</button><button class="btn" id="saveReport">ذخیره در دانلودها</button></div><button class="btn ghost" data-act="cancel" style="width:100%;margin-top:10px">بستن</button>`);
     $('#reportText').value = report;
+    $('#shareReport').onclick = () => send({ type: 'share-report', report });
+    $('#saveReport').onclick = () => { send({ type: 'save-report', report, name }); toast('گزارش در دانلودها ذخیره شد'); };
     $('#copyReport').onclick = async () => { const box = $('#reportText'); box.focus(); box.select(); try { await navigator.clipboard.writeText(report); toast('گزارش کپی شد'); } catch (e) { toast('متن انتخاب شد؛ کپی را از منوی گوشی بزنید'); } };
   }
   window.receiveReportReady = receiveReportReady;
+  function receiveReportSaved(name) { toast('گزارش ذخیره شد: ' + name); }
+  window.receiveReportSaved = receiveReportSaved;
 
   /* ---------- اعلان‌ها: خالی ---------- */
 

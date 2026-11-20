@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type FileDownload, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
@@ -90,6 +90,8 @@ export default function HomeScreen() {
   const [activeFile, setActiveFile] = useState<OfflineFile | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [browserLoading, setBrowserLoading] = useState(false);
+  const reportRequested = useRef(false);
+  const reportForPanel = useRef<{ report: string; name: string } | null>(null);
   const transfers = useRef<Record<string, { name: string; mime: string; total: number; chunks: string[] }>>({});
 
   const readFiles = useCallback(async () => {
@@ -131,6 +133,11 @@ export default function HomeScreen() {
   const onPanelLoad = useCallback(() => {
     webRef.current?.injectJavaScript(PANEL_FALLBACK_JS);
     void sendFiles();
+    const pending = reportForPanel.current;
+    if (pending) {
+      reportForPanel.current = null;
+      webRef.current?.injectJavaScript(`window.receiveReportReady && window.receiveReportReady(${JSON.stringify(pending.report)},${JSON.stringify(pending.name)}); true;`);
+    }
   }, [sendFiles]);
 
   const downloadVideo = useCallback(async (url: string, nameHint?: string) => {
@@ -175,12 +182,22 @@ export default function HomeScreen() {
       }
       return;
     }
-    if (message.type === "offline-report-request") { webRef.current?.injectJavaScript("window.__mazCollectOfflineReport && window.__mazCollectOfflineReport(); true;"); return; }
+    if (message.type === "offline-report-request") { reportRequested.current = true; setBrowserUrl(SITE); setMode("browser"); return; }
     if (message.type === "offline-report-result" && message.report && FileSystem.documentDirectory) {
       const reportName = `mazvideo-offline-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       const reportUri = `${OFFLINE_DIR}${reportName}`;
       await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-      await FileSystem.writeAsStringAsync(reportUri, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportReady && window.receiveReportReady(${JSON.stringify(message.report)},${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
+      await FileSystem.writeAsStringAsync(reportUri, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => { reportForPanel.current = { report: message.report!, name: reportName }; reportRequested.current = false; setMode("ui"); }).catch(() => undefined);
+      return;
+    }
+    if (message.type === "share-report" && message.report) {
+      await Share.share({ title: "گزارش ذخیره‌سازی آفلاین ماز ویدیو", message: message.report }).catch(() => undefined);
+      return;
+    }
+    if (message.type === "save-report" && message.report && FileSystem.documentDirectory) {
+      const reportName = message.name || `mazvideo-offline-report-${Date.now()}.json`;
+      await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
+      await FileSystem.writeAsStringAsync(`${OFFLINE_DIR}${reportName}`, message.report, { encoding: FileSystem.EncodingType.UTF8 }).then(() => webRef.current?.injectJavaScript(`window.receiveReportSaved && window.receiveReportSaved(${JSON.stringify(reportName)}); true;`)).catch(() => undefined);
       return;
     }
     if (message.type === "list-files") { await sendFiles(); return; }
@@ -197,7 +214,7 @@ export default function HomeScreen() {
   const address = (browserUrl.replace(/^https?:\/\//, "").split("/")[0] || browserTitle || "biomaze.ir").toLowerCase();
   const header = <SafeAreaView edges={["top"]} style={styles.headerSafe}><View style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-back" size={23} color="#18212b" /></Pressable><LinearGradient colors={["#14897F", "#3388FF", "#7B5CF0", "#E8557A"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.addressBar}><View style={styles.addressContent}><MaterialIcons name="lock" size={19} color="#fff" /><Text style={styles.addressText} numberOfLines={1}>{address}</Text></View></LinearGradient><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#18212b" /></Pressable></View></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS); }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setBrowserLoading(false); setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View></View></View></View>;
+  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS); if (reportRequested.current) setTimeout(() => webRef.current?.injectJavaScript("window.__mazCollectOfflineReport && window.__mazCollectOfflineReport(); true;"), 700); }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setBrowserLoading(false); setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View></View></View></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
   return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }
