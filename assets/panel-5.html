@@ -106,6 +106,7 @@
   .search svg { font-size: 20px; color: var(--accent); }
   .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 14.5px; }
   .search input::placeholder { color: var(--hint); }
+  .search input[type="search"]::-webkit-search-cancel-button, .search input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
   .search .clear { font-size: 16px; color: var(--hint); display: none; }
   .search.has .clear { display: block; }
   .list { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 190px; }
@@ -244,7 +245,7 @@
     <section class="page" id="downloads">
       <div class="card dl-head">
         <span class="ic g-blue"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
-        <div><h1>بخش دانلودهای داخلی مرورگر</h1><p id="count"></p></div>
+        <div><h1>بخش دانلودهای داخلی مرورگر</h1></div>
       </div>
       <label class="search" id="searchBox">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -357,7 +358,6 @@
     $('#searchBox').classList.toggle('has', !!q);
     const shown = videos.filter(v => norm(v.name).includes(q));
     const totalMb = videos.reduce((sum, v) => sum + (Number(v.size) || 0), 0);
-    $('#count').textContent = `${fa(videos.length)} ویدیو ذخیره شده`;
     $('#videoCount').textContent = String(videos.length);
     $('#videoSize').textContent = `${totalMb} MB`;
     $('#list').innerHTML = shown.length ? shown.map(v => `
