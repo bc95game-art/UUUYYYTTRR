@@ -3,12 +3,11 @@ import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, StyleS
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type FileDownload, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
-import { Asset } from "expo-asset";
 import { useVideoPlayer, VideoView } from "expo-video";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 const SITE = "https://biomaze.ir/";
-const PANEL_HTML_ASSET = require("../../assets/panel-5.html");
+const PANEL_URI = "file:///android_asset/panel-5.html";
 const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
 const BROWSER_BRIDGE_JS = `(function(){
   function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
@@ -65,7 +64,6 @@ function NativePlayer({ file, onClose }: { file: OfflineFile; onClose: () => voi
 export default function HomeScreen() {
   const webRef = useRef<WebView>(null);
   const [mode, setMode] = useState<Mode>("ui");
-  const [panelUri, setPanelUri] = useState<string | null>(null);
   const [browserUrl, setBrowserUrl] = useState(SITE);
   const [browserTitle, setBrowserTitle] = useState("biomaze.ir");
   const [browserCanGoBack, setBrowserCanGoBack] = useState(false);
@@ -96,19 +94,6 @@ export default function HomeScreen() {
     return latest;
   }, [readFiles]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const asset = Asset.fromModule(PANEL_HTML_ASSET);
-        await asset.downloadAsync();
-        if (!cancelled && asset.localUri) setPanelUri(asset.localUri);
-      } catch {
-        if (!cancelled) setUiError("فایل رابط داخلی برنامه بارگذاری نشد");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
   useEffect(() => {
     let cancelled = false;
     void readFiles().then((latest) => { if (!cancelled) setFiles(latest); });
@@ -186,8 +171,7 @@ export default function HomeScreen() {
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
   if (mode === "browser") return <View style={styles.root}>{header}<WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS)} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /></View>} /></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
-  if (!panelUri) return <View style={styles.loader}><ActivityIndicator size="large" color="#1d8fd0" /><Text style={styles.loaderText}>در حال آماده‌سازی برنامه…</Text></View>;
-  return <View style={styles.root}><WebView ref={webRef} source={{ uri: panelUri }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
+  return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
 }
 
 const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#0d1620" }, browser: { flex: 1, backgroundColor: "#0d1620" }, nativeHeader: { height: 60, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 8, gap: 8 }, headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7f9", borderWidth: 1, borderColor: "#dfe5ea" }, addressBar: { flex: 1, height: 42, borderRadius: 24, overflow: "hidden", position: "relative", justifyContent: "center" }, addressTeal: { position: "absolute", left: 0, top: 0, bottom: 0, width: "38%", backgroundColor: "#0b9d9a" }, addressBlue: { position: "absolute", left: "25%", top: 0, bottom: 0, width: "50%", backgroundColor: "#176dcc", opacity: 0.98 }, addressPink: { position: "absolute", right: 0, top: 0, bottom: 0, width: "42%", backgroundColor: "#d53182", opacity: 0.96 }, addressContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 10 }, addressText: { color: "#fff", fontSize: 14.5, fontWeight: "800", textAlign: "center" }, loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0d1620", gap: 12, padding: 24 }, loaderText: { color: "#fff", fontSize: 13, textAlign: "center" }, errorTitle: { color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }, retry: { backgroundColor: "#1d8fd0", borderRadius: 22, paddingHorizontal: 26, paddingVertical: 12 }, retryText: { color: "#fff", fontWeight: "700" }, player: { flex: 1, backgroundColor: "#000" }, playerBar: { minHeight: 58, backgroundColor: "#000", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 10 }, close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" }, playerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" }, video: { flex: 1, width: "100%" } });
