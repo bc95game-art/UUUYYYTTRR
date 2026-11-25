@@ -74,10 +74,13 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp assets/panel-5.html android/app/src/main/assets/panel-5.html
           cp assets/panel-controller.js android/app/src/main/assets/panel-controller.js
+          cp assets/images/home-site-background.png android/app/src/main/assets/home-site-background.png
           test -s android/app/src/main/assets/panel-5.html
           test -s android/app/src/main/assets/panel-controller.js
+          test -s android/app/src/main/assets/home-site-background.png
           grep -q "videoCount" android/app/src/main/assets/panel-5.html
           grep -q "panel-controller.js" android/app/src/main/assets/panel-5.html
+          grep -q "home-site-background.png" android/app/src/main/assets/panel-5.html
           grep -q "theme-change" android/app/src/main/assets/panel-controller.js
 
       - name: Configure release signing
