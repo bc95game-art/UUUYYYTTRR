@@ -4,7 +4,7 @@ import type { OfflineVideo, OfflineVideoOrigin, LibrarySnapshot } from "./types"
 export const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
 const MANIFEST_URI = `${OFFLINE_DIR}.manifest.json`;
 const PART_SUFFIX = ".part";
-const VIDEO_EXTENSIONS = /\.(mp4|m4v|webm|mov|mkv|3gp|ts|m4s|aac|m3u8)$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|m4v|webm|mov|mkv|3gp|ts)$/i;
 
 type Manifest = { schemaVersion: 1; revision: number; files: OfflineVideo[] };
 
