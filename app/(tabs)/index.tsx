@@ -53,7 +53,7 @@ export default function HomeScreen() {
       dispatch({ type: "SNAPSHOT", revision: snapshot.revision });
       pushSnapshot(snapshot.files, snapshot.revision);
       void result;
-    } catch (error) {
+    } catch {
       setUiError("ذخیرهٔ ویدئو انجام نشد؛ فایل ناقص وارد کتابخانه نشد.");
     }
   }, [applySnapshot, pushSnapshot]);
