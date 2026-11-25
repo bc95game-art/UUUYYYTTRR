@@ -33,4 +33,10 @@ describe("offline foundation", () => {
     expect(SITE_BRIDGE_JS).not.toContain("for(var i=0;i<total;i++)");
   });
 
+  it("installs the site bridge once and avoids an endless cache scan loop", () => {
+    expect(SITE_BRIDGE_JS).toContain("__mazBridgeInstalled");
+    expect(SITE_BRIDGE_JS).toContain("scanOnce");
+    expect(SITE_BRIDGE_JS).not.toContain("setInterval(scan");
+  });
+
 });
