@@ -45,7 +45,13 @@ const $ = (s, r = document) => r.querySelector(s);
   function receiveFilesSnapshot(snapshot) { videos = Array.isArray(snapshot?.files) ? snapshot.files : []; renderList(); }
   const fileName = v => v.displayName || v.name || v.fileName || 'ویدئوی آفلاین';
   const fileSize = v => Math.max(0, Math.round(Number(v.sizeBytes ?? v.size) / 1024 / 1024));
-  const fileDate = v => v.date || 'ذخیره‌شده در این برنامه';
+  const fileDate = v => {
+    if (v.date) return v.date;
+    if (v.createdAt) {
+      try { return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short' }).format(new Date(v.createdAt)); } catch (e) { /* fallback below */ }
+    }
+    return 'ذخیره‌شده در این برنامه';
+  };
   window.receiveFilesSnapshot = receiveFilesSnapshot;
   function receiveFiles(list) { receiveFilesSnapshot({ files: list }); }
   window.receiveFiles = receiveFiles;
