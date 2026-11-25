@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialLibraryState, libraryReducer } from "../features/offline/reducer";
+import { SITE_BRIDGE_JS, TRANSFER_CHUNK_BYTES } from "../features/browser/site-bridge";
 
 describe("offline foundation", () => {
   it("accepts only newer library revisions", () => {
@@ -22,6 +23,14 @@ describe("offline foundation", () => {
     const failed = libraryReducer(started, { type: "TRANSFER_FAIL", id: "active", message: "TRANSFER_INCOMPLETE" });
     expect(failed.transfer.phase).toBe("failed");
     expect(failed.transfer.error).toBe("TRANSFER_INCOMPLETE");
+  });
+
+  it("uses acknowledged bounded chunks in the WebView bridge", () => {
+    expect(TRANSFER_CHUNK_BYTES).toBeLessThanOrEqual(128 * 1024);
+    expect(SITE_BRIDGE_JS).toContain("window.__mazAck");
+    expect(SITE_BRIDGE_JS).toContain("window.__mazNack");
+    expect(SITE_BRIDGE_JS).toContain("blob.slice");
+    expect(SITE_BRIDGE_JS).not.toContain("for(var i=0;i<total;i++)");
   });
 
 });

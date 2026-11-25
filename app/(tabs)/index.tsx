@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type FileDownload, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
@@ -32,13 +32,12 @@ export default function HomeScreen() {
   const browserUrlRef = useRef(SITE);
   const [browserTitle, setBrowserTitle] = useState("biomaze.ir");
   const [browserCanGoBack, setBrowserCanGoBack] = useState(false);
-  const [files, setFiles] = useState<OfflineVideo[]>([]);
   const [activeFile, setActiveFile] = useState<OfflineVideo | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [browserLoading, setBrowserLoading] = useState(false);
   const [state, dispatch] = useReducer(libraryReducer, initialLibraryState);
 
-  const applySnapshot = useCallback((next: OfflineVideo[]) => { filesRef.current = next; setFiles(next); }, []);
+  const applySnapshot = useCallback((next: OfflineVideo[]) => { filesRef.current = next; }, []);
   const refreshFiles = useCallback(async () => { const snapshot = await offlineRepository.initialize(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); return snapshot.files; }, [applySnapshot]);
   useEffect(() => { void refreshFiles().catch((e) => dispatch({ type: "ERROR", message: String(e?.message || e) })); }, [refreshFiles]);
   useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { if (mode === "player") { setMode("ui"); return true; } if (mode === "browser" && browserCanGoBack) { webRef.current?.goBack(); return true; } if (mode === "browser") { setMode("ui"); return true; } return false; }); return () => sub.remove(); }, [mode, browserCanGoBack]);
@@ -57,7 +56,7 @@ export default function HomeScreen() {
     } catch (error) {
       setUiError("ذخیرهٔ ویدئو انجام نشد؛ فایل ناقص وارد کتابخانه نشد.");
     }
-  }, [applySnapshot, pushSnapshot, refreshFiles]);
+  }, [applySnapshot, pushSnapshot]);
 
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
     const message = decode(event.nativeEvent.data); if (!message) return;
@@ -67,13 +66,14 @@ export default function HomeScreen() {
       if (message.type === "open-site") { const next = String(p.url || SITE); browserUrlRef.current = next; setBrowserUrl(next); setMode("browser"); return; }
       if (message.type === "download.url") { await downloadVideo(String(p.url || ""), String(p.name || "")); return; }
       if (message.type === "transfer.start") { const id = String(p.transferId || ""); if (blobTransfers.start({ transferId: id, name: String(p.name || ""), mime: String(p.mime || "video/mp4"), total: Number(p.total), byteLength: Number(p.byteLength) })) dispatch({ type: "TRANSFER_START", id, total: Number(p.byteLength) }); return; }
-      if (message.type === "transfer.chunk") { const id = String(p.transferId || ""); if (!blobTransfers.chunk(id, Number(p.index), String(p.data || ""))) throw new Error("TRANSFER_CHUNK_REJECTED"); const progress = blobTransfers.progress(id); if (progress) dispatch({ type: "TRANSFER_PROGRESS", id, received: progress.received }); return; }
+      if (message.type === "transfer.chunk") { const id = String(p.transferId || ""); const index = Number(p.index); if (!blobTransfers.chunk(id, index, String(p.data || ""))) throw new Error("TRANSFER_CHUNK_REJECTED"); const progress = blobTransfers.progress(id); if (progress) dispatch({ type: "TRANSFER_PROGRESS", id, received: progress.received }); webRef.current?.injectJavaScript(`window.__mazAck && window.__mazAck(${JSON.stringify(id)},${index}); true;`); return; }
+      if (message.type === "transfer.failed") { throw new Error(String(p.error || "BLOB_READ_FAILED")); }
       if (message.type === "transfer.complete") { const id = String(p.transferId || ""); dispatch({ type: "TRANSFER_VERIFY", id }); await blobTransfers.complete(id); dispatch({ type: "TRANSFER_COMMIT", id }); const snapshot = await offlineRepository.refresh(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); return; }
       if (message.type === "files.list") { await sendFiles(); return; }
       if (message.type === "file.open") { const file = filesRef.current.find((item) => item.id === String(p.id)); if (file) { const check = await FileSystem.getInfoAsync(file.localUri); if (check.exists) { setActiveFile(file); setMode("player"); } } return; }
       if (message.type === "file.delete") { const next = await offlineRepository.remove(String(p.id)); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); return; }
       if (message.type === "file.rename") { const updated = await offlineRepository.rename(String(p.id), String(p.name || "")); const next = await offlineRepository.refresh(); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); void updated; return; }
-    } catch (error) { const messageText = String(error instanceof Error ? error.message : error); dispatch({ type: "ERROR", message: messageText }); if (message.type.startsWith("transfer.")) dispatch({ type: "TRANSFER_FAIL", id: String(p.transferId || ""), message: messageText }); setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
+    } catch (error) { const messageText = String(error instanceof Error ? error.message : error); const transferId = String(p.transferId || ""); if (transferId) { blobTransfers.abort(transferId); webRef.current?.injectJavaScript(`window.__mazNack && window.__mazNack(${JSON.stringify(transferId)}); true;`); } dispatch({ type: "ERROR", message: messageText }); if (message.type.startsWith("transfer.")) dispatch({ type: "TRANSFER_FAIL", id: transferId, message: messageText }); setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
   }, [applySnapshot, blobTransfers, downloadVideo, pushSnapshot, sendFiles]);
 
   const onPanelLoad = useCallback(() => { setTimeout(() => pushSnapshot(), 80); }, [pushSnapshot]);

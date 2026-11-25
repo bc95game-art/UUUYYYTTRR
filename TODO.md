@@ -1,24 +1,24 @@
 # TODO — ماز ویدیو v2
 
-## بازطراحی رابط
-- [x] صفحهٔ خانه فقط کارت مرکزی گرادیانی آبی/سبز، نام طراح «امیررضا موسوی» و دکمهٔ «باز کردن سایت» را نشان می‌دهد؛ نوار آدرس، بازگشت و refresh از خانه حذف شده‌اند.
-- [x] مرورگر سایت هدر native مطابق تصویر مرجع دارد: دکمهٔ بازگشت سفید در چپ، نوار آدرس گرادیانی با قفل و دامنه در وسط، و refresh در راست.
-- [x] صفحهٔ اعلان‌ها وجود دارد، با لمس فعال می‌شود و حالت خالی نمایشی واضح دارد.
-- [x] تنظیمات عنوان «تنظیمات برنامه» و گزینهٔ «پوستهٔ نمایشی» دارد؛ متن توضیحی و نام طراح از این بخش حذف شده و دکمه‌های روشن/تاریک/خودکار با click و touch کار می‌کنند.
-- [x] `assets/panel-5.html` و `lib/panel-html.ts` از یک منبع canonical همگام شده‌اند.
+## بخش‌های تحویل‌شده
+- [x] ظاهر فارسی/RTL پنل در `assets/panel-5.html` حفظ شده و منطق آن در `assets/panel-controller.js` متمرکز است.
+- [x] خانه، navigation، مرورگر داخلی، هدر native، loading، back handling و پخش native به هم متصل هستند.
+- [x] repository خصوصی `documentDirectory/offline` با manifest، revision، شناسهٔ پایدار، migration فایل‌های قدیمی و ثبت اتمیک فعال است.
+- [x] عملیات ثبت، refresh، rename، delete، collision نام، cleanup فایل‌های `.part` و recovery پس از restart پوشش داده شده‌اند.
+- [x] انتقال Blob با chunk محدود، backpressure و ACK/NACK بین WebView و native انجام می‌شود؛ اندازه، duplicate، کامل‌بودن و integrity حجم بررسی می‌شود.
+- [x] لینک مستقیم و منابع download به native منتقل می‌شوند؛ m3u8/HLS و منابع نامناسب برای فایل مستقل عمداً رد می‌شوند.
+- [x] ابزار گزارش استخراج، markerهای آن و dependency مربوط حذف شده‌اند.
+- [x] boilerplateهای استفاده‌نشدهٔ Expo حذف شده‌اند.
 
-## دانلود و کتابخانهٔ آفلاین
-- [x] صفحهٔ دانلودها تعداد دانلودها را به‌صورت عدد ساده، حجم را با واحد بزرگ `MB` و کنار هر عنوان با ایموجی 🎬/💾 نشان می‌دهد.
-- [x] وقتی فهرست خالی است، متن دقیق «در حال حاضر ویدیویی وجود ندارد» نمایش داده می‌شود.
-- [x] فهرست از فضای خصوصی همین برنامه خوانده می‌شود و بعد از هر دریافت native بدون reload به WebView تزریق و refresh می‌شود.
-- [x] پخش native، حذف و تغییرنام فایل در bridge ثبت شده‌اند؛ تغییرنام پسوند ویدئو را حفظ می‌کند.
-- [x] لینک‌های دارای `download` در WebView به bridge native ارسال می‌شوند و فایل خالی/خراب به‌عنوان دانلود موفق ثبت نمی‌شود.
-- [x] WebView پس از بارگذاری و بعد از لمس صفحه، IndexedDB و Cache API همان دامنه را اسکن می‌کند؛ Blob/Response ویدئویی را با انتقال chunk/base64 به پوشهٔ خصوصی native می‌فرستد تا در دانلودها قابل نمایش شود.
-- [ ] اگر سایت از DRM، رمزگذاری اختصاصی یا storage غیرقابل‌خواندن استفاده کند، برای export رسمی به API/قرارداد سایت نیاز است.
+## محدودیت‌های فنی صریح
+- [ ] DRM، MediaSource، رمزگذاری اختصاصی و داده‌ای که WebView اجازهٔ خواندن آن را نمی‌دهد، بدون قرارداد رسمی سایت قابل export نیست.
+- [ ] HLS/m3u8 به‌عنوان playlist مستقل پشتیبانی نمی‌شود؛ پشتیبانی کامل آن نیازمند downloader چندبخشی و مجوز سایت است.
+- [ ] تست end-to-end روی WebView واقعی و Android 13 باید با APK نصب‌شده انجام شود.
 
-## کیفیت و انتشار
-- [x] TypeScript check، unit tests، lint و syntax-check HTML اجرا شده‌اند.
-- [x] package مستقل `space.manus.mazvideo.v2` و versionCode `2` برای جلوگیری از تداخل نصب ساخته شده است.
-- [ ] commit اصلاحات و build جدید GitHub Actions با release signature پایدار.
-- [ ] بررسی artifact نهایی از نظر package، versionCode، امضا، zip integrity و hash قبل از انتشار لینک.
-- [ ] تست نصب و تعامل روی گوشی واقعی؛ این محیط به دستگاه اندرویدی کاربر دسترسی مستقیم ندارد.
+## انتشار
+- [x] `pnpm check`، تست‌های واحد، syntax-check controller و قرارداد asset موفق هستند.
+- [x] package مستقل `space.manus.mazvideo.v2`، version `1.2.0` و versionCode `3` در تنظیمات ثبت شده‌اند.
+- [x] workflow شامل typecheck، test، prebuild، کپی هر دو asset پنل، signing، assemble، zipalign و بررسی V2/fingerprint است.
+- [ ] اجرای موفق workflow رسمی GitHub روی commit نهایی و دریافت artifact.
+- [ ] بررسی artifact نهایی از نظر package، version، versionCode، امضا، zip integrity و hash.
+- [ ] نصب و آزمون واقعی روی گوشی Android 13.
