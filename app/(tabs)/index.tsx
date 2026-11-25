@@ -43,15 +43,16 @@ export default function HomeScreen() {
   useEffect(() => { void refreshFiles().catch((e) => dispatch({ type: "ERROR", message: String(e?.message || e) })); }, [refreshFiles]);
   useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { if (mode === "player") { setMode("ui"); return true; } if (mode === "browser" && browserCanGoBack) { webRef.current?.goBack(); return true; } if (mode === "browser") { setMode("ui"); return true; } return false; }); return () => sub.remove(); }, [mode, browserCanGoBack]);
 
-  const pushSnapshot = useCallback((list = filesRef.current) => { webRef.current?.injectJavaScript(`window.receiveFilesSnapshot && window.receiveFilesSnapshot(${JSON.stringify({ revision: state.revision, files: list })}); true;`); }, [state.revision]);
-  const sendFiles = useCallback(async () => { const list = await refreshFiles(); pushSnapshot(list); }, [pushSnapshot, refreshFiles]);
+  const pushSnapshot = useCallback((list = filesRef.current, revision = state.revision) => { webRef.current?.injectJavaScript(`window.receiveFilesSnapshot && window.receiveFilesSnapshot(${JSON.stringify({ revision, files: list })}); true;`); }, [state.revision]);
+  const sendFiles = useCallback(async () => { const snapshot = await offlineRepository.refresh(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); }, [applySnapshot, pushSnapshot]);
 
   const downloadVideo = useCallback(async (url: string, nameHint?: string) => {
     try {
       const result = await downloadDirect(url, nameHint);
-      const next = await refreshFiles();
-      applySnapshot(next);
-      pushSnapshot(next);
+      const snapshot = await offlineRepository.refresh();
+      applySnapshot(snapshot.files);
+      dispatch({ type: "SNAPSHOT", revision: snapshot.revision });
+      pushSnapshot(snapshot.files, snapshot.revision);
       void result;
     } catch (error) {
       setUiError("ذخیرهٔ ویدئو انجام نشد؛ فایل ناقص وارد کتابخانه نشد.");
@@ -62,17 +63,17 @@ export default function HomeScreen() {
     const message = decode(event.nativeEvent.data); if (!message) return;
     const p = payloadOf<Record<string, any>>(message);
     try {
-      if (message.type === "panel.ready") { pushSnapshot(); return; }
+      if (message.type === "panel.ready") { const snapshot = await offlineRepository.initialize(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); return; }
       if (message.type === "open-site") { const next = String(p.url || SITE); browserUrlRef.current = next; setBrowserUrl(next); setMode("browser"); return; }
       if (message.type === "download.url") { await downloadVideo(String(p.url || ""), String(p.name || "")); return; }
       if (message.type === "transfer.start") { const id = String(p.transferId || ""); if (blobTransfers.start({ transferId: id, name: String(p.name || ""), mime: String(p.mime || "video/mp4"), total: Number(p.total), byteLength: Number(p.byteLength) })) dispatch({ type: "TRANSFER_START", id, total: Number(p.byteLength) }); return; }
-      if (message.type === "transfer.chunk") { blobTransfers.chunk(String(p.transferId || ""), Number(p.index), String(p.data || "")); return; }
-      if (message.type === "transfer.complete") { const id = String(p.transferId || ""); dispatch({ type: "TRANSFER_VERIFY", id }); await blobTransfers.complete(id); const next = await refreshFiles(); applySnapshot(next); pushSnapshot(next); return; }
+      if (message.type === "transfer.chunk") { const id = String(p.transferId || ""); if (!blobTransfers.chunk(id, Number(p.index), String(p.data || ""))) throw new Error("TRANSFER_CHUNK_REJECTED"); const progress = blobTransfers.progress(id); if (progress) dispatch({ type: "TRANSFER_PROGRESS", id, received: progress.received }); return; }
+      if (message.type === "transfer.complete") { const id = String(p.transferId || ""); dispatch({ type: "TRANSFER_VERIFY", id }); await blobTransfers.complete(id); const snapshot = await offlineRepository.refresh(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); return; }
       if (message.type === "files.list") { await sendFiles(); return; }
       if (message.type === "file.open") { const file = filesRef.current.find((item) => item.id === String(p.id)); if (file) { const check = await FileSystem.getInfoAsync(file.localUri); if (check.exists) { setActiveFile(file); setMode("player"); } } return; }
-      if (message.type === "file.delete") { const next = await offlineRepository.remove(String(p.id)); applySnapshot(next.files); pushSnapshot(next.files); return; }
-      if (message.type === "file.rename") { const updated = await offlineRepository.rename(String(p.id), String(p.name || "")); const next = await offlineRepository.refresh(); applySnapshot(next.files); pushSnapshot(next.files); void updated; return; }
-    } catch (error) { dispatch({ type: "ERROR", message: String(error instanceof Error ? error.message : error) }); setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
+      if (message.type === "file.delete") { const next = await offlineRepository.remove(String(p.id)); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); return; }
+      if (message.type === "file.rename") { const updated = await offlineRepository.rename(String(p.id), String(p.name || "")); const next = await offlineRepository.refresh(); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); void updated; return; }
+    } catch (error) { const messageText = String(error instanceof Error ? error.message : error); dispatch({ type: "ERROR", message: messageText }); if (message.type.startsWith("transfer.")) dispatch({ type: "TRANSFER_FAIL", id: String(p.transferId || ""), message: messageText }); setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
   }, [applySnapshot, blobTransfers, downloadVideo, pushSnapshot, sendFiles]);
 
   const onPanelLoad = useCallback(() => { setTimeout(() => pushSnapshot(), 80); }, [pushSnapshot]);

@@ -16,4 +16,12 @@ describe("offline foundation", () => {
     expect(committed.transfer.phase).toBe("committing");
   });
 
+  it("rejects stale transfer progress and records failures for the active transfer", () => {
+    const started = libraryReducer(initialLibraryState, { type: "TRANSFER_START", id: "active", total: 100 });
+    expect(libraryReducer(started, { type: "TRANSFER_PROGRESS", id: "other", received: 99 })).toEqual(started);
+    const failed = libraryReducer(started, { type: "TRANSFER_FAIL", id: "active", message: "TRANSFER_INCOMPLETE" });
+    expect(failed.transfer.phase).toBe("failed");
+    expect(failed.transfer.error).toBe("TRANSFER_INCOMPLETE");
+  });
+
 });
