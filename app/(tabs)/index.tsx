@@ -1,183 +1,119 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { ActivityIndicator, BackHandler, NativeSyntheticEvent, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type FileDownload, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import * as FileSystem from "expo-file-system/legacy";
 import { useVideoPlayer, VideoView } from "expo-video";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
+import { decode, encode, payloadOf } from "../../features/bridge/protocol";
+import { initialLibraryState, libraryReducer } from "../../features/offline/reducer";
+import { offlineRepository, OFFLINE_DIR, cleanName } from "../../features/offline/repository";
+import type { OfflineVideo } from "../../features/offline/types";
 
 const SITE = "https://biomaze.ir/";
 const PANEL_URI = "file:///android_asset/panel-5.html";
-const OFFLINE_DIR = `${FileSystem.documentDirectory ?? ""}offline/`;
-const BROWSER_BRIDGE_JS = `(function(){
-  function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
-  var seen=window.__mazSeenOffline||(window.__mazSeenOffline={});
-  function videoName(name){return String(name||'biomaze-offline-'+Date.now()+'.mp4').replace(/[^\\w\\u0600-\\u06ff.()_-]+/g,'_');}
-  function looksVideo(value){return /\\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)(?:[?#].*)?$/i.test(String(value||''));}
-  function emitBlob(blob,name,key){
-    if(!blob||!blob.size||blob.size<1024||seen[key])return;
-    seen[key]=1; var id='blob:'+key, reader=new FileReader();
-    reader.onload=function(){var all=String(reader.result||'').split(',')[1]||'', step=220000, total=Math.ceil(all.length/step), safe=videoName(name);
-      for(var i=0;i<total;i++)send({type:'offline-chunk',transferId:id,name:safe,mime:blob.type||'video/mp4',index:i,total:total,data:all.slice(i*step,(i+1)*step)});
-      send({type:'offline-complete',transferId:id,name:safe,mime:blob.type||'video/mp4',total:total});};
-    reader.readAsDataURL(blob);
-  }
-  function scanBinary(value,name){try{if(value instanceof ArrayBuffer)emitBlob(new Blob([value],{type:'video/mp4'}),name,'array:'+name+':'+value.byteLength);else if(ArrayBuffer.isView&&ArrayBuffer.isView(value))emitBlob(new Blob([value.buffer],{type:'video/mp4'}),name,'view:'+name+':'+value.byteLength);}catch(e){}}
-  function fetchValue(value,name){var s=String(value||''); if(/^blob:/i.test(s)){fetch(s).then(function(r){return r.blob();}).then(function(b){emitBlob(b,name,s);}).catch(function(){});}
-    else if(/^https?:/i.test(s)&&looksVideo(s))send({type:'download-url',url:s,name:videoName(name||s.split('/').pop())});}
-  function scanValue(value,name,depth,seenObjects){
-    if(value==null||depth>3)return;
-    if(typeof Blob!=='undefined'&&value instanceof Blob){emitBlob(value,name,'stored:'+name+':'+value.size);return;}
-    if(typeof ArrayBuffer!=='undefined'&&(value instanceof ArrayBuffer||(ArrayBuffer.isView&&ArrayBuffer.isView(value)))){scanBinary(value,name);return;}
-    if(typeof value==='string'){fetchValue(value,name);return;}
-    if(typeof value!=='object')return;
-    if(seenObjects.indexOf(value)>=0)return; seenObjects.push(value);
-    var label=value.name||value.fileName||value.filename||value.title||name||'video.mp4';
-    Object.keys(value).slice(0,40).forEach(function(k){scanValue(value[k],label,depth+1,seenObjects);});
-  }
-  function scanIndexedDB(){if(!window.indexedDB||!indexedDB.databases)return; indexedDB.databases().then(function(dbs){dbs.forEach(function(info){var req=indexedDB.open(info.name); req.onsuccess=function(){var db=req.result; Array.prototype.slice.call(db.objectStoreNames).forEach(function(storeName){try{var tx=db.transaction(storeName,'readonly'), get=tx.objectStore(storeName).getAll(); get.onsuccess=function(){(get.result||[]).forEach(function(v,i){scanValue(v,storeName+'-'+i+'.mp4',0,[]);});};}catch(e){}});};};}).catch(function(){});}
-  function scanCache(){if(!window.caches)return; caches.keys().then(function(keys){keys.forEach(function(k){caches.open(k).then(function(c){return c.keys().then(function(reqs){reqs.forEach(function(req){c.match(req).then(function(r){if(r&&r.blob)r.blob().then(function(b){if((b.type||'').indexOf('video')>=0||looksVideo(req.url))emitBlob(b,videoName(req.url.split('/').pop()),'cache:'+req.url);});});});});}).catch(function(){});});}).catch(function(){});}
-  document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;if(a&&a.href)send({type:'download-url',url:a.href,name:a.getAttribute('download')||''});setTimeout(function(){scanIndexedDB();scanCache();},1200);},true);
-  function scanAll(){scanIndexedDB();scanCache();}
-  setTimeout(scanAll,900);
-  setInterval(scanAll,5000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)scanAll();});
-})(); true;`;
-const PANEL_FALLBACK_JS = `(function(){
-  function send(m){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify(m));}
-  function go(page){
-    var pages=document.querySelectorAll('.page'); for(var i=0;i<pages.length;i++) pages[i].classList.toggle('active',pages[i].id===page);
-    var tabs=document.querySelectorAll('.tab'); for(var j=0;j<tabs.length;j++) tabs[j].classList.toggle('active',tabs[j].getAttribute('data-page')===page);
-    var track=document.getElementById('track'), tab=document.querySelector('.tab[data-page="'+page+'"]');
-    if(track&&tab) track.style.setProperty('--i',tab.getAttribute('data-i'));
-    var screen=document.getElementById('screen'); if(screen) screen.scrollTop=0;
-  }
-  var tabs=document.querySelectorAll('.tab,#bell'); for(var k=0;k<tabs.length;k++) tabs[k].onclick=function(e){if(e)e.preventDefault();go(this.getAttribute('data-page'));};
-  var open=document.getElementById('openSiteBtn'), reload=document.getElementById('reloadBtn');
-  if(open) open.onclick=function(){send({type:'open-site',url:'${SITE}'});};
-  if(reload) reload.onclick=function(){send({type:'open-site',url:'${SITE}'});};
-  var back=document.getElementById('backBtn'); if(back) back.onclick=function(){if(window.history)window.history.back();};
-})(); true;`;
-type OfflineFile = { id: number; uri: string; name: string; size: number; date: string };
-type Mode = "ui" | "browser" | "player";
+const MAX_TRANSFER_BYTES = 300 * 1024 * 1024;
 
-function NativePlayer({ file, onClose }: { file: OfflineFile; onClose: () => void }) {
-  const player = useVideoPlayer(file.uri, (p) => { p.play(); });
-  return <View style={styles.player}><SafeAreaView edges={["top"]} style={styles.playerBar}><Pressable onPress={onClose} style={styles.close}><MaterialIcons name="arrow-forward" size={24} color="#fff" /></Pressable><Text style={styles.playerTitle} numberOfLines={1}>{file.name}</Text></SafeAreaView><VideoView player={player} style={styles.video} nativeControls /></View>;
+type Mode = "ui" | "browser" | "player";
+type Transfer = { name: string; mime: string; total: number; byteLength: number; chunks: Array<string | undefined> };
+
+const BROWSER_BRIDGE_JS = `(function(){
+  var MAX=300*1024*1024, seen=window.__mazSeenOffline||(window.__mazSeenOffline={});
+  function send(type,payload){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify({protocolVersion:1,requestId:'web-'+Date.now()+'-'+Math.random().toString(16).slice(2),type:type,payload:payload||{}}));}
+  function safe(n){return String(n||'biomaze-video.mp4').replace(/[^\\w\\u0600-\\u06ff.() _-]+/g,'_');}
+  function isVideo(v){return /\\.(mp4|m4v|webm|mov|mkv|3gp|ts|m4s|m3u8)(?:[?#].*)?$/i.test(String(v||''));}
+  function emit(blob,name,key){if(!blob||!blob.size||blob.size<1024||blob.size>MAX||seen[key])return;seen[key]=1;var id='blob-'+Date.now()+'-'+Math.random().toString(16).slice(2),r=new FileReader();r.onload=function(){var all=String(r.result||'').split(',')[1]||'',step=180000,total=Math.ceil(all.length/step),n=safe(name);send('transfer.start',{transferId:id,name:n,mime:blob.type||'video/mp4',total:total,byteLength:blob.size});for(var i=0;i<total;i++)send('transfer.chunk',{transferId:id,index:i,total:total,data:all.slice(i*step,(i+1)*step)});send('transfer.complete',{transferId:id,total:total});};r.readAsDataURL(blob);}
+  function value(v,n){try{if(v instanceof Blob){emit(v,n,'blob:'+n+':'+v.size);return;}if(v instanceof ArrayBuffer){emit(new Blob([v],{type:'video/mp4'}),n,'array:'+n+':'+v.byteLength);return;}if(ArrayBuffer.isView&&ArrayBuffer.isView(v)){emit(new Blob([v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)],{type:'video/mp4'}),n,'view:'+n+':'+v.byteLength);return;}if(typeof v==='string'){if(/^blob:/i.test(v))fetch(v).then(function(x){return x.blob();}).then(function(b){emit(b,n,v);}).catch(function(){});else if(/^https?:/i.test(v)&&isVideo(v))send('download.url',{url:v,name:safe(n||v.split('/').pop())});return;}if(!v||typeof v!=='object')return;Object.keys(v).slice(0,40).forEach(function(k){value(v[k],n||k);});}catch(e){}}
+  function scanDb(){if(!window.indexedDB||!window.indexedDB.databases)return;window.indexedDB.databases().then(function(dbs){(dbs||[]).forEach(function(info){try{var req=indexedDB.open(info.name);req.onsuccess=function(){var db=req.result;Array.prototype.forEach.call(db.objectStoreNames,function(s){try{var q=db.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=function(){(q.result||[]).forEach(function(v,i){value(v,s+'-'+i+'.mp4');});};}catch(e){}});};}catch(e){}});}).catch(function(){});}
+  function scanCache(){if(!window.caches)return;caches.keys().then(function(keys){(keys||[]).forEach(function(k){caches.open(k).then(function(c){return c.keys().then(function(reqs){(reqs||[]).forEach(function(req){c.match(req).then(function(r){if(r&&r.blob&&(((r.headers.get('content-type')||'').indexOf('video')>=0)||isVideo(req.url)))r.blob().then(function(b){emit(b, safe(req.url.split('/').pop()), 'cache:'+req.url);}).catch(function(){});});});});}).catch(function(){});});}).catch(function(){});}
+  document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;if(a&&a.href)send('download.url',{url:a.href,name:a.getAttribute('download')||''});setTimeout(function(){scanDb();scanCache();},800);},true);
+  function scan(){scanDb();scanCache();}window.__mazScanOffline=scan;setTimeout(scan,900);setInterval(scan,7000);document.addEventListener('visibilitychange',function(){if(!document.hidden)scan();});
+})(); true;`;
+
+function NativePlayer({ file, onClose }: { file: OfflineVideo; onClose: () => void }) {
+  const player = useVideoPlayer(file.localUri, (p) => { p.play(); });
+  return <View style={styles.player}><SafeAreaView edges={["top"]} style={styles.playerBar}><Pressable onPress={onClose} style={styles.close}><MaterialIcons name="arrow-forward" size={24} color="#fff" /></Pressable><Text style={styles.playerTitle} numberOfLines={1}>{file.displayName}</Text></SafeAreaView><VideoView player={player} style={styles.video} nativeControls /></View>;
 }
 
 export default function HomeScreen() {
   const webRef = useRef<WebView>(null);
+  const filesRef = useRef<OfflineVideo[]>([]);
+  const transfers = useRef<Record<string, Transfer>>({});
   const [mode, setMode] = useState<Mode>("ui");
   const [browserUrl, setBrowserUrl] = useState(SITE);
+  const browserUrlRef = useRef(SITE);
   const [browserTitle, setBrowserTitle] = useState("biomaze.ir");
   const [browserCanGoBack, setBrowserCanGoBack] = useState(false);
-  const [files, setFiles] = useState<OfflineFile[]>([]);
-  const [activeFile, setActiveFile] = useState<OfflineFile | null>(null);
+  const [files, setFiles] = useState<OfflineVideo[]>([]);
+  const [activeFile, setActiveFile] = useState<OfflineVideo | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
-  const transfers = useRef<Record<string, { name: string; mime: string; total: number; chunks: string[] }>>({});
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [state, dispatch] = useReducer(libraryReducer, initialLibraryState);
 
-  const readFiles = useCallback(async () => {
-    if (!FileSystem.documentDirectory) return [] as OfflineFile[];
-    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-    const names = await FileSystem.readDirectoryAsync(OFFLINE_DIR).catch(() => [] as string[]);
-    const output: OfflineFile[] = [];
-    const videoPattern = /\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)$/i;
-    for (const name of names.filter((x) => !x.startsWith(".") && videoPattern.test(x))) {
-      const uri = `${OFFLINE_DIR}${name}`;
-      const info = await FileSystem.getInfoAsync(uri).catch(() => ({ exists: false }));
-      if (!info.exists || ("isDirectory" in info && info.isDirectory)) continue;
-      const bytes = "size" in info && typeof info.size === "number" ? info.size : 0;
-      output.push({ id: output.length + 1, uri, name, size: Math.max(0, Math.round(bytes / 1024 / 1024)), date: "ذخیره‌شده در این برنامه" });
-    }
-    return output;
-  }, []);
-
-  const refreshFiles = useCallback(async () => {
-    const latest = await readFiles();
-    setFiles(latest);
-    return latest;
-  }, [readFiles]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void readFiles().then((latest) => { if (!cancelled) setFiles(latest); });
-    return () => { cancelled = true; };
-  }, [readFiles]);
+  const applySnapshot = useCallback((next: OfflineVideo[]) => { filesRef.current = next; setFiles(next); }, []);
+  const refreshFiles = useCallback(async () => { const snapshot = await offlineRepository.initialize(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); return snapshot.files; }, [applySnapshot]);
+  useEffect(() => { void refreshFiles().catch((e) => dispatch({ type: "ERROR", message: String(e?.message || e) })); }, [refreshFiles]);
   useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { if (mode === "player") { setMode("ui"); return true; } if (mode === "browser" && browserCanGoBack) { webRef.current?.goBack(); return true; } if (mode === "browser") { setMode("ui"); return true; } return false; }); return () => sub.remove(); }, [mode, browserCanGoBack]);
 
-  const pushFilesToPanel = useCallback((list: OfflineFile[]) => {
-    webRef.current?.injectJavaScript(`window.receiveFiles(${JSON.stringify(list.map(({ id, name, size, date }) => ({ id, name, size, date })))}); true;`);
-  }, []);
-  const sendFiles = useCallback(async () => {
-    const latest = await refreshFiles();
-    pushFilesToPanel(latest);
-  }, [pushFilesToPanel, refreshFiles]);
-  const onPanelLoad = useCallback(() => {
-    webRef.current?.injectJavaScript(PANEL_FALLBACK_JS);
-    void sendFiles();
-  }, [sendFiles]);
+  const pushSnapshot = useCallback((list = filesRef.current) => { webRef.current?.injectJavaScript(`window.receiveFilesSnapshot && window.receiveFilesSnapshot(${JSON.stringify({ revision: state.revision, files: list })}); true;`); }, [state.revision]);
+  const sendFiles = useCallback(async () => { const list = await refreshFiles(); pushSnapshot(list); }, [pushSnapshot, refreshFiles]);
+
+  const commitBlobTransfer = useCallback(async (id: string, transfer: Transfer) => {
+    if (transfer.total <= 0 || transfer.total > 50000 || transfer.chunks.length !== transfer.total || transfer.chunks.some((chunk) => !chunk)) throw new Error("TRANSFER_INCOMPLETE");
+    const base64 = transfer.chunks.join("");
+    if (base64.length > MAX_TRANSFER_BYTES * 2) throw new Error("TRANSFER_TOO_LARGE");
+    const temp = await offlineRepository.tempUri(id);
+    await FileSystem.writeAsStringAsync(temp, base64, { encoding: FileSystem.EncodingType.Base64 });
+    const info = await FileSystem.getInfoAsync(temp);
+    if (!info.exists || !("size" in info) || !info.size) throw new Error("EMPTY_FILE");
+    await offlineRepository.commitTemp(temp, cleanName(transfer.name), "webview-blob", undefined, transfer.mime);
+    const next = await refreshFiles(); pushSnapshot(next);
+  }, [pushSnapshot, refreshFiles]);
 
   const downloadVideo = useCallback(async (url: string, nameHint?: string) => {
-    if (!url || !FileSystem.documentDirectory) return;
-    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-    let raw = nameHint || url.split("?")[0].split("/").pop() || `biomaze-${Date.now()}.mp4`;
-    try { raw = decodeURIComponent(raw); } catch { /* نام رمزگذاری‌شدهٔ خراب را پاک‌سازی می‌کنیم */ }
-    let clean = raw.replace(/[^\p{L}\p{N}._-]/gu, "_") || `biomaze-${Date.now()}.mp4`;
-    if (!/\.(mp4|m4v|webm|mov|mkv|3gp|ts|m3u8)$/i.test(clean)) clean += ".mp4";
-    const existing = await FileSystem.readDirectoryAsync(OFFLINE_DIR).catch(() => [] as string[]);
-    const extension = clean.match(/\.[^.]+$/)?.[0] ?? ".mp4";
-    const stem = clean.slice(0, -extension.length);
-    let candidate = clean;
-    let suffix = 1;
-    while (existing.includes(candidate)) candidate = `${stem} (${suffix++})${extension}`;
-    const target = `${OFFLINE_DIR}${candidate}`;
-    await FileSystem.downloadAsync(url, target).then(async () => {
-      const info = await FileSystem.getInfoAsync(target).catch(() => ({ exists: false }));
-      if (!info.exists || !("size" in info) || !info.size) throw new Error("empty download");
-      const latest = await refreshFiles();
-      pushFilesToPanel(latest);
-    }).catch(() => setUiError("دانلود ویدئو انجام نشد. اتصال یا دسترسی فایل را بررسی کنید."));
-  }, [pushFilesToPanel, refreshFiles]);
+    if (!/^https?:/i.test(url) || !FileSystem.documentDirectory) return;
+    if (/\.m3u8(?:[?#]|$)/i.test(url)) { setUiError("این لینک فهرست پخش است و فایل ویدئویی مستقل نیست."); return; }
+    const id = `download-${Date.now()}-${Math.random().toString(16).slice(2)}`; dispatch({ type: "TRANSFER_START", id, total: 0 });
+    const temp = await offlineRepository.tempUri(id);
+    try {
+      await FileSystem.deleteAsync(temp, { idempotent: true });
+      const result = await FileSystem.downloadAsync(url, temp);
+      if (result.status < 200 || result.status >= 300) throw new Error("HTTP_ERROR");
+      const info = await FileSystem.getInfoAsync(temp);
+      if (!info.exists || !("size" in info) || !info.size) throw new Error("EMPTY_FILE");
+      dispatch({ type: "TRANSFER_VERIFY", id });
+      await offlineRepository.commitTemp(temp, cleanName(nameHint || url.split("?")[0].split("/").pop() || "biomaze-video.mp4"), "direct-download", url);
+      dispatch({ type: "TRANSFER_COMMIT", id }); await refreshFiles().then(pushSnapshot);
+    } catch (error) { await FileSystem.deleteAsync(temp, { idempotent: true }).catch(() => undefined); dispatch({ type: "TRANSFER_FAIL", id, message: String(error instanceof Error ? error.message : error) }); setUiError("ذخیرهٔ ویدئو انجام نشد؛ فایل ناقص وارد کتابخانه نشد."); }
+  }, [pushSnapshot, refreshFiles]);
 
   const onMessage = useCallback(async (event: WebViewMessageEvent) => {
-    let message: { type?: string; url?: string; id?: number; name?: string; mime?: string; transferId?: string; index?: number; total?: number; data?: string } = {};
-    try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
-    if (message.type === "open-site") { setBrowserUrl(message.url || SITE); setMode("browser"); return; }
-    if (message.type === "download-url" && message.url) { await downloadVideo(message.url, message.name); return; }
-    if (message.type === "offline-chunk" && message.transferId && typeof message.index === "number" && message.data) {
-      const current = transfers.current[message.transferId] || { name: message.name || "biomaze-offline.mp4", mime: message.mime || "video/mp4", total: message.total || 0, chunks: [] };
-      current.chunks[message.index] = message.data; current.total = message.total || current.total; transfers.current[message.transferId] = current; return;
-    }
-    if (message.type === "offline-complete" && message.transferId) {
-      const current = transfers.current[message.transferId];
-      if (current && current.total > 0 && current.chunks.filter(Boolean).length === current.total) {
-        await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true }).catch(() => undefined);
-        const clean = (current.name || "biomaze-offline.mp4").replace(/[^\p{L}\p{N}._()-]/gu, "_");
-        const target = `${OFFLINE_DIR}${clean || "biomaze-offline.mp4"}`;
-        await FileSystem.writeAsStringAsync(target, current.chunks.join(""), { encoding: FileSystem.EncodingType.Base64 }).then(async () => { const latest = await refreshFiles(); pushFilesToPanel(latest); }).catch(() => setUiError("ذخیرهٔ ویدئوی آفلاین سایت انجام نشد."));
-        delete transfers.current[message.transferId];
-      }
-      return;
-    }
-    if (message.type === "list-files") { await sendFiles(); return; }
-    if (message.type === "open-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) { setActiveFile(file); setMode("player"); } return; }
-    if (message.type === "delete-file" && message.id) { const file = files.find((x) => x.id === message.id); if (file) await FileSystem.deleteAsync(file.uri, { idempotent: true }); await sendFiles(); return; }
-    if (message.type === "rename-file" && message.id && message.name?.trim()) { const file = files.find((x) => x.id === message.id); if (file) { const typed = message.name.trim().replace(/[\\/:*?"<>|]/g, "_"); const oldExt = file.name.match(/\.[^.]+$/)?.[0] ?? ".mp4"; const safe = /\.[A-Za-z0-9]{2,5}$/.test(typed) ? typed : `${typed}${oldExt}`; await FileSystem.moveAsync({ from: file.uri, to: `${OFFLINE_DIR}${safe}` }).catch(() => undefined); } await sendFiles(); return; }
-  }, [downloadVideo, files, pushFilesToPanel, refreshFiles, sendFiles]);
+    const message = decode(event.nativeEvent.data); if (!message) return;
+    const p = payloadOf<Record<string, any>>(message);
+    try {
+      if (message.type === "panel.ready") { pushSnapshot(); return; }
+      if (message.type === "open-site") { const next = String(p.url || SITE); browserUrlRef.current = next; setBrowserUrl(next); setMode("browser"); return; }
+      if (message.type === "download.url") { await downloadVideo(String(p.url || ""), String(p.name || "")); return; }
+      if (message.type === "transfer.start") { const total = Number(p.total) || 0, bytes = Number(p.byteLength) || 0; if (!p.transferId || total <= 0 || bytes <= 0 || bytes > MAX_TRANSFER_BYTES) return; transfers.current[String(p.transferId)] = { name: String(p.name || "biomaze-video.mp4"), mime: String(p.mime || "video/mp4"), total, byteLength: bytes, chunks: new Array(total) }; dispatch({ type: "TRANSFER_START", id: String(p.transferId), total: bytes }); return; }
+      if (message.type === "transfer.chunk") { const t = transfers.current[String(p.transferId)]; const index = Number(p.index); if (!t || !Number.isInteger(index) || index < 0 || index >= t.total || typeof p.data !== "string") return; if (!t.chunks[index]) t.chunks[index] = p.data; return; }
+      if (message.type === "transfer.complete") { const id = String(p.transferId || ""), t = transfers.current[id]; if (!t) return; delete transfers.current[id]; dispatch({ type: "TRANSFER_VERIFY", id }); await commitBlobTransfer(id, t); return; }
+      if (message.type === "files.list") { await sendFiles(); return; }
+      if (message.type === "file.open") { const file = filesRef.current.find((item) => item.id === String(p.id)); if (file) { const check = await FileSystem.getInfoAsync(file.localUri); if (check.exists) { setActiveFile(file); setMode("player"); } } return; }
+      if (message.type === "file.delete") { const next = await offlineRepository.remove(String(p.id)); applySnapshot(next.files); pushSnapshot(next.files); return; }
+      if (message.type === "file.rename") { const updated = await offlineRepository.rename(String(p.id), String(p.name || "")); const next = await offlineRepository.refresh(); applySnapshot(next.files); pushSnapshot(next.files); void updated; return; }
+    } catch (error) { dispatch({ type: "ERROR", message: String(error instanceof Error ? error.message : error) }); setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
+  }, [applySnapshot, commitBlobTransfer, downloadVideo, pushSnapshot, sendFiles]);
 
-  const onBrowserNavigation = (nav: WebViewNavigation) => { setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || nav.url.replace(/^https?:\/\//, "").split("/")[0]); };
-  const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => {
-    await downloadVideo(event.nativeEvent.downloadUrl);
-  }, [downloadVideo]);
-
+  const onPanelLoad = useCallback(() => { setTimeout(() => pushSnapshot(), 80); }, [pushSnapshot]);
+  const onBrowserNavigation = (nav: WebViewNavigation) => { const next = nav.url || browserUrlRef.current; browserUrlRef.current = next; setBrowserUrl(next); setBrowserCanGoBack(nav.canGoBack); setBrowserTitle(nav.title || next.replace(/^https?:\/\//, "").split("/")[0]); };
+  const onFileDownload = useCallback(async (event: NativeSyntheticEvent<FileDownload>) => { await downloadVideo(event.nativeEvent.downloadUrl); }, [downloadVideo]);
   const address = (browserUrl.replace(/^https?:\/\//, "").split("/")[0] || browserTitle || "biomaze.ir").toLowerCase();
   const header = <SafeAreaView edges={["top"]} style={styles.headerSafe}><View style={styles.nativeHeader}><Pressable onPress={() => setMode("ui")} style={styles.headerButton}><MaterialIcons name="arrow-back" size={23} color="#18212b" /></Pressable><LinearGradient colors={["#14897F", "#3388FF", "#7B5CF0", "#E8557A"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.addressBar}><View style={styles.addressContent}><MaterialIcons name="lock" size={19} color="#fff" /><Text style={styles.addressText} numberOfLines={1}>{address}</Text></View></LinearGradient><Pressable onPress={() => webRef.current?.reload()} style={styles.headerButton}><MaterialIcons name="refresh" size={22} color="#18212b" /></Pressable></View></SafeAreaView>;
   if (mode === "player" && activeFile) return <NativePlayer file={activeFile} onClose={() => setMode("ui")} />;
-  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => webRef.current?.injectJavaScript(BROWSER_BRIDGE_JS)} onFileDownload={onFileDownload} onError={(event) => { setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} startInLoadingState renderLoading={() => <View style={styles.loader}><ActivityIndicator size="large" color="#bfe8ff" /></View>} /></View></View></View>;
+  if (mode === "browser") return <View style={styles.root}><View style={styles.browserShell}>{header}<View style={styles.browserViewport}><WebView ref={webRef} source={{ uri: browserUrl }} style={styles.browser} javaScriptEnabled domStorageEnabled allowsFullscreenVideo setSupportMultipleWindows={false} onLoadStart={() => setBrowserLoading(true)} onNavigationStateChange={onBrowserNavigation} onMessage={onMessage} injectedJavaScriptBeforeContentLoaded={BROWSER_BRIDGE_JS} onLoadEnd={() => { setBrowserLoading(false); webRef.current?.injectJavaScript(`${BROWSER_BRIDGE_JS}\ntrue;`); }} onFileDownload={onFileDownload} onError={(event) => { setBrowserLoading(false); setUiError(event.nativeEvent.description || "بارگذاری سایت ناموفق بود"); setMode("ui"); }} onHttpError={() => { setBrowserLoading(false); setUiError("سایت پاسخ مناسبی نداد؛ اتصال اینترنت و آدرس سایت را بررسی کنید."); setMode("ui"); }} /><View pointerEvents="none" style={[styles.browserLoader, !browserLoading && styles.hiddenLoader]}><ActivityIndicator size="large" color="#bfe8ff" /></View></View></View></View>;
   if (uiError) return <View style={styles.loader}><Text style={styles.errorTitle}>خطا در باز کردن محیط برنامه</Text><Text style={styles.loaderText}>{uiError}</Text><Pressable style={styles.retry} onPress={() => setUiError(null)}><Text style={styles.retryText}>تلاش دوباره</Text></Pressable></View>;
-  return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")}/></View>;
+  return <View style={styles.root}><WebView ref={webRef} source={{ uri: PANEL_URI }} style={styles.browser} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled allowFileAccess allowUniversalAccessFromFileURLs onMessage={onMessage} onLoadEnd={onPanelLoad} onError={(event) => setUiError(event.nativeEvent.description || "بارگذاری رابط برنامه ناموفق بود")} /></View>;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#0D47A1" }, browserShell: { flex: 1, backgroundColor: "#0D47A1" }, browserViewport: { flex: 1, backgroundColor: "#0D47A1" }, browser: { flex: 1, backgroundColor: "#0D47A1" }, headerSafe: { backgroundColor: "#fff" }, nativeHeader: { height: 60, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 8 }, headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7f9", borderWidth: 1, borderColor: "#dfe5ea" }, addressBar: { flex: 1, height: 42, borderRadius: 22, justifyContent: "center" }, addressContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 10 }, addressText: { color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center" }, loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0D47A1", gap: 12, padding: 24 }, loaderText: { color: "#fff", fontSize: 13, textAlign: "center" }, errorTitle: { color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }, retry: { backgroundColor: "#1d8fd0", borderRadius: 22, paddingHorizontal: 26, paddingVertical: 12 }, retryText: { color: "#fff", fontWeight: "700" }, player: { flex: 1, backgroundColor: "#000" }, playerBar: { minHeight: 58, backgroundColor: "#000", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 10 }, close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" }, playerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" }, video: { flex: 1, width: "100%" } });
+const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#f1f1f3" }, browserShell: { flex: 1, backgroundColor: "#0D47A1" }, browserViewport: { flex: 1, backgroundColor: "#0D47A1", position: "relative" }, browser: { flex: 1, backgroundColor: "#0D47A1" }, browserLoader: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", backgroundColor: "#0D47A1" }, hiddenLoader: { opacity: 0 }, headerSafe: { backgroundColor: "#fff" }, nativeHeader: { height: 60, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 8 }, headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7f9", borderWidth: 1, borderColor: "#dfe5ea" }, addressBar: { flex: 1, height: 42, borderRadius: 22, justifyContent: "center" }, addressContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 10 }, addressText: { color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center" }, loader: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f1f1f3", gap: 12, padding: 24 }, loaderText: { color: "#fff", fontSize: 13, textAlign: "center" }, errorTitle: { color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }, retry: { backgroundColor: "#1d8fd0", borderRadius: 22, paddingHorizontal: 26, paddingVertical: 12 }, retryText: { color: "#fff", fontWeight: "700" }, player: { flex: 1, backgroundColor: "#000" }, playerBar: { minHeight: 58, backgroundColor: "#000", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 10 }, close: { width: 40, height: 40, alignItems: "center", justifyContent: "center" }, playerTitle: { flex: 1, color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "right" }, video: { flex: 1, width: "100%" } });
