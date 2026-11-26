@@ -11,7 +11,7 @@ type Manifest = { schemaVersion: 1; revision: number; files: OfflineVideo[] };
 const now = () => new Date().toISOString();
 const cleanName = (value: string, fallback = "biomaze-video.mp4") => {
   const decoded = (() => { try { return decodeURIComponent(value); } catch { return value; } })();
-  const safe = decoded.replace(/[^\p{L}\p{N}._()\- ]/gu, "_").trim().replace(/\s+/g, " ");
+  const safe = decoded.replace(/[^\p{L}\p{N}\p{M}\u200c\u200d._()\- ]/gu, "_").trim().replace(/\s+/g, " ");
   return safe || fallback;
 };
 const extensionOf = (name: string) => name.match(/\.[A-Za-z0-9]{2,8}$/)?.[0].toLowerCase() ?? ".mp4";
@@ -136,7 +136,7 @@ export class OfflineRepository {
       await this.initializeUnlocked();
       const tempInfo = await info(tempUri);
       if (!tempInfo.exists || !("size" in tempInfo) || !tempInfo.size) throw new Error("EMPTY_FILE");
-      const safe = cleanName(requestedName); const ext = extensionOf(safe); const stem = safe.slice(0, -ext.length) || "biomaze-video";
+      const safe = cleanName(requestedName); const hasExt = /\.[A-Za-z0-9]{2,8}$/.test(safe); const ext = hasExt ? extensionOf(safe) : ".mp4"; const stem = (hasExt ? safe.slice(0, -ext.length) : safe) || "biomaze-video";
       const existingNames = new Set((await FileSystem.readDirectoryAsync(OFFLINE_DIR).catch(() => [] as string[])).filter((name) => !name.endsWith(PART_SUFFIX)));
       let fileName = `${stem}${ext}`; let index = 1;
       while (existingNames.has(fileName)) fileName = `${stem} (${index++})${ext}`;

@@ -32,11 +32,11 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0D47A1", padding: 28 },
-  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 12, textAlign: "center" },
-  message: { color: "#e5f4ff", fontSize: 15, lineHeight: 24, textAlign: "center", marginBottom: 22 },
+  root: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f1f1f3", padding: 28 },
+  title: { color: "#18212b", fontSize: 22, fontWeight: "800", marginBottom: 12, textAlign: "center" },
+  message: { color: "#53606c", fontSize: 15, lineHeight: 24, textAlign: "center", marginBottom: 22 },
   button: { backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 26, paddingVertical: 13 },
   buttonText: { color: "#0D47A1", fontWeight: "800" },
-  detailsToggle: { color: "#bfe8ff", marginTop: 18 },
-  details: { color: "#fff", marginTop: 12, textAlign: "center" },
+  detailsToggle: { color: "#1d8fd0", marginTop: 18 },
+  details: { color: "#18212b", marginTop: 12, textAlign: "center" },
 });

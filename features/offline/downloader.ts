@@ -4,8 +4,9 @@ import type { OfflineVideo } from "./types";
 
 export type DownloadResult = { file: OfflineVideo; id: string };
 export type DownloadProgress = { id: string; phase: "downloading" | "verifying" | "committing"; bytes?: number; total?: number };
+export type DownloadHeaders = { cookie?: string; referer?: string; userAgent?: string };
 
-export async function downloadDirect(url: string, nameHint: string | undefined, onProgress?: (progress: DownloadProgress) => void): Promise<DownloadResult> {
+export async function downloadDirect(url: string, nameHint: string | undefined, onProgress?: (progress: DownloadProgress) => void, headers?: DownloadHeaders): Promise<DownloadResult> {
   if (!/^https?:/i.test(url)) throw new Error("INVALID_URL");
   if (/\.m3u8(?:[?#]|$)/i.test(url)) throw new Error("UNSUPPORTED_SOURCE");
   if (!FileSystem.documentDirectory) throw new Error("NO_STORAGE");
@@ -14,7 +15,11 @@ export async function downloadDirect(url: string, nameHint: string | undefined, 
   try {
     await FileSystem.deleteAsync(temp, { idempotent: true });
     onProgress?.({ id, phase: "downloading" });
-    const result = await FileSystem.downloadAsync(url, temp);
+    const requestHeaders: Record<string, string> = {};
+    if (headers?.cookie) requestHeaders.Cookie = headers.cookie;
+    if (headers?.referer) requestHeaders.Referer = headers.referer;
+    if (headers?.userAgent) requestHeaders["User-Agent"] = headers.userAgent;
+    const result = await FileSystem.downloadAsync(url, temp, Object.keys(requestHeaders).length ? { headers: requestHeaders } : undefined);
     if (result.status < 200 || result.status >= 300) throw new Error("HTTP_ERROR");
     const info = await FileSystem.getInfoAsync(temp);
     if (!info.exists || !("size" in info) || !info.size) throw new Error("EMPTY_FILE");

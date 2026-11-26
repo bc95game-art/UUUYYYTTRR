@@ -31,6 +31,7 @@ const $ = (s, r = document) => r.querySelector(s);
     if (tab) $('#track').style.setProperty('--i', tab.dataset.i);
     $('#bell').classList.toggle('active', page === 'notifs');
     $('#screen').scrollTo({ top: 0 });
+    if (page === 'downloads') send('files.list');
   }
   $$('.tab, #bell').forEach(b => tap(b, () => go(b.dataset.page)));
 
