@@ -138,20 +138,58 @@ jobs:
           command -v aapt
           APK=android/app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
+          echo "APK file: $APK"
+          stat -c 'APK size: %s bytes' "$APK"
+          file "$APK"
+          # Validate the APK as a ZIP before any upload. apksigner/zipalign do
+          # not prove that every deflated entry can be decompressed by Android.
+          unzip -t "$APK" | tee apk-zip-test.txt
+          python3 - "$APK" <<'PY'
+          import sys
+          from zipfile import ZipFile, BadZipFile
+
+          apk = sys.argv[1]
+          try:
+              with ZipFile(apk) as archive:
+                  bad = archive.testzip()
+                  names = set(archive.namelist())
+          except (BadZipFile, OSError) as exc:
+              raise SystemExit(f'APK ZIP integrity check failed: {exc}')
+          if bad:
+              raise SystemExit(f'APK entry failed decompression: {bad}')
+          required = {'AndroidManifest.xml', 'resources.arsc', 'classes.dex'}
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit(f'APK is missing required entries: {missing}')
+          print(f'APK ZIP integrity OK: {len(names)} entries')
+          PY
           apksigner verify --verbose --print-certs "$APK" | tee apk-signature.txt
           grep -qi "V2 Signer: certificate SHA-256 digest: 138b8124cc3fcc62c74fa79e4955b1eb280e09162a511c2195d424ca2fe6d7a7" apk-signature.txt
           zipalign -c -v 4 "$APK" | tail -1
-          aapt dump badging "$APK" | grep -E "package:|sdkVersion|targetSdkVersion|application-label" | head -5
+          aapt dump badging "$APK" | tee apk-badging.txt
+          grep -q "package: name='space.manus.mazvideo.v2' versionCode='3' versionName='1.2.0'" apk-badging.txt
+          grep -q "targetSdkVersion:'" apk-badging.txt
           sha256sum "$APK" | tee apk-sha256.txt
 
-      - name: Upload APK artifact
+      - name: Upload compressed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mazvideo-release-apk
           path: |
             android/app/build/outputs/apk/release/app-release.apk
+            apk-zip-test.txt
             apk-signature.txt
+            apk-badging.txt
             apk-sha256.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload uncompressed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mazvideo-release-apk-uncompressed
+          path: android/app/build/outputs/apk/release/app-release.apk
+          compression-level: 0
           if-no-files-found: error
           retention-days: 30
 
