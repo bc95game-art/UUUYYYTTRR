@@ -71,8 +71,10 @@
 
   .card { background: var(--section); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; transition: background .3s; }
   #downloads .dl-head { min-height: 132px; background-image: linear-gradient(90deg, rgba(3,14,55,.82), rgba(8,45,130,.38)), url('notifications-background.png'); background-size: cover; background-position: center; color: #fff; border: 1px solid rgba(83,201,255,.55); }
+  #downloads .dl-head .ic { color: #8edcff; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.42); box-shadow: 0 10px 30px rgba(0,0,0,.24); backdrop-filter: blur(6px); }
+  #downloads .dl-title-box { padding: 8px 12px; border-radius: 14px; background: rgba(3,14,49,.44); border: 1px solid rgba(255,255,255,.18); width: fit-content; max-width: 100%; }
   #downloads .dl-head h1 { color: #ffd34f; text-shadow: 0 2px 9px rgba(0,0,0,.75); }
-  #downloads .dl-head p { color: rgba(255,255,255,.94); line-height: 1.75; margin-top: 5px; background: rgba(3,14,49,.4); border: 1px solid rgba(255,255,255,.16); border-radius: 12px; padding: 4px 10px; width: fit-content; max-width: 100%; }
+  #downloads .dl-head p { color: rgba(255,255,255,.94); line-height: 1.75; margin-top: 6px; }
 
   /* ---------- خانه: مرورگر ---------- */
   .toolbar { display: flex; align-items: center; gap: 8px; }
@@ -155,19 +157,15 @@
   #notifs .empty-full { margin: auto; text-align: center; color: var(--hint); font-size: 14px; }
   #notifs .empty-full svg { font-size: 54px; opacity: .35; display: block; margin: 0 auto 10px; }
   .notice-card { margin: auto; width: 100%; min-height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 28px 22px; background-image: linear-gradient(145deg, rgba(4,15,70,.42), rgba(3,32,100,.68)), url('downloads-background.png'); background-size: cover; background-position: center; border: 1px solid rgba(92,206,255,.55); color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.72); }
-  .notice-icon { width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center; color: var(--purple); background: rgba(123,92,240,.14); }
+  .notice-icon { width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center; color: #fff; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.38); box-shadow: 0 10px 30px rgba(0,0,0,.24); backdrop-filter: blur(6px); }
   .notice-icon svg { width: 42px; height: 42px; }
-  .notice-copy { width: min(100%, 330px); padding: 10px 14px 12px; border-radius: 16px; background: rgba(3,14,49,.46); border: 1px solid rgba(255,255,255,.18); }
   .notice-card h1 { color: #ffd34f; font-size: 20px; }
-  .notice-card p { color: rgba(255,255,255,.96); font-size: 13.5px; line-height: 1.9; margin-top: 4px; }
+  .notice-card p { color: rgba(255,255,255,.96); font-size: 13.5px; line-height: 1.9; margin-top: 0; padding: 5px 11px; border-radius: 12px; background: rgba(3,14,49,.42); border: 1px solid rgba(255,255,255,.16); }
 
   /* ---------- تنظیمات ---------- */
   .section-head { padding: 0 12px 7px; font-size: 13px; font-weight: 700; color: var(--hint); }
-  #settings .settings-hero { min-height: 224px; margin-bottom: -8px; position: relative; z-index: 1; display: flex; align-items: flex-end; padding: 18px; border: 1px solid rgba(255,80,80,.72); background-image: linear-gradient(180deg, rgba(40,0,0,.04), rgba(15,0,0,.72)), url('settings-background.png'); background-size: cover; background-position: center; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
-  #settings .settings-hero-copy { width: 100%; padding: 11px 14px; border-radius: 16px; background: rgba(12,0,0,.62); border: 1px solid rgba(255,255,255,.24); backdrop-filter: blur(5px); }
-  #settings .settings-hero-copy strong { display: block; font-size: 18px; font-weight: 900; color: #ffd34f; }
-  #settings .settings-hero-copy small { display: block; margin-top: 4px; color: rgba(255,255,255,.94); font-size: 12.5px; }
-  #settings .settings-card { position: relative; z-index: 2; padding-top: 8px; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+  #settings .settings-hero { min-height: 224px; margin-bottom: 14px; display: block; padding: 0; border: 1px solid rgba(255,80,80,.72); background-image: linear-gradient(180deg, rgba(40,0,0,.04), rgba(15,0,0,.16)), url('settings-background.png'); background-size: cover; background-position: center; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+  #settings .settings-card { padding-top: 8px; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
   .row { display: flex; align-items: center; gap: 12px; padding-inline-start: 16px; }
   .row .ic { width: 38px; height: 38px; border-radius: 12px; color: #fff; display: grid; place-items: center; font-size: 19px; flex-shrink: 0; }
   .row .body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 13px 0; padding-inline-end: 16px; border-top: 1px solid var(--separator); }
@@ -266,7 +264,7 @@
     <section class="page" id="downloads">
       <div class="card dl-head">
         <span class="ic g-blue"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
-        <div><h1>📥 بخش دانلودهای داخلی مرورگر</h1><p>ویدیوهای ذخیره‌شدهٔ آفلاین شما</p></div>
+        <div><div class="dl-title-box"><h1>بخش دانلودهای داخلی مرورگر</h1></div><p>ویدیوهای ذخیره‌شدهٔ آفلاین شما</p></div>
       </div>
       <label class="search" id="searchBox">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -285,15 +283,15 @@
     <section class="page" id="notifs">
       <div class="card notice-card">
         <div class="notice-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg></div>
-        <div class="notice-copy"><h1>🔔 اعلان‌ها</h1>
-        <p>در حال حاضر اعلان جدیدی برای نمایش وجود ندارد.</p></div>
+        <h1>اعلان‌ها</h1>
+        <p>در حال حاضر اعلان جدیدی برای نمایش وجود ندارد.</p>
       </div>
     </section>
 
     <!-- ===== تنظیمات ===== -->
     <section class="page" id="settings">
       <div>
-        <div class="card settings-hero"><div class="settings-hero-copy"><strong>✨ ظاهر برنامه</strong><small>رنگ و حالت نمایش پنل را به شکل دلخواه انتخاب کنید</small></div></div>
+        <div class="card settings-hero" aria-label="بنر تنظیمات"></div>
         <div class="card settings-card">
           <div class="row"><span class="ic g-purple"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></span><span class="body"><span class="info"><span class="title">پوستهٔ نمایشی</span></span>
             <div class="seg" id="themeSeg"><button data-t="light">روشن</button><button data-t="dark">تاریک</button><button data-t="auto" class="on">خودکار</button></div></span></div>
