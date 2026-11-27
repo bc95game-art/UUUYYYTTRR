@@ -32,10 +32,46 @@ export type PageReport = {
   referrer: string;
   media: Array<{ tag: string; src: string; currentSrc?: string; type?: string; size?: number }>;
   videoLinks: Array<{ url: string; text: string; download?: string }>;
-  streams?: Array<{ url: string; status?: number; contentType?: string; isMaster?: boolean; segmentCount?: number; encrypted?: boolean; preview?: string; error?: string }>;
+  streams?: HlsStreamReport[];
   resources: Array<{ url: string; initiatorType?: string; size?: number; duration?: number }>;
   storage: { indexedDbNames: string[]; cacheNames: string[]; localStorageKeys: string[]; sessionStorageKeys: string[] };
   bridge: { installed: boolean; observedTransfers: number; observedDownloads: number };
+};
+
+export type HlsSegmentReport = {
+  url: string;
+  duration?: number;
+  sequence?: number;
+  initUrl?: string;
+};
+
+export type HlsVariantReport = {
+  url: string;
+  bandwidth?: number;
+  averageBandwidth?: number;
+  width?: number;
+  height?: number;
+  codecs?: string;
+  audio?: string;
+  video?: string;
+};
+
+export type HlsStreamReport = {
+  url: string;
+  status?: number;
+  contentType?: string;
+  kind?: "master" | "media" | "unknown";
+  isMaster?: boolean;
+  targetDuration?: number;
+  mediaSequence?: number;
+  hasEndList?: boolean;
+  segmentCount?: number;
+  encrypted?: boolean;
+  keyMethod?: string;
+  variants?: HlsVariantReport[];
+  segments?: HlsSegmentReport[];
+  preview?: string;
+  error?: string;
 };
 
 export type BridgeEnvelope = {

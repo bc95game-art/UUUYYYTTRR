@@ -89,7 +89,8 @@ export default function HomeScreen() {
       if (message.type === "open-site") { const next = browserUrlRef.current || String(p.url || SITE); browserUrlRef.current = next; setBrowserUrl(next); setBrowserSourceUrl(next); setBrowserMounted(true); setUiError(null); setBrowserError(null); setMode("browser"); return; }
       if (message.type === "report.refresh") {
         if (!browserMounted || !browserRef.current) { pushReportStatus("صفحهٔ سایت هنوز باز نشده است؛ ابتدا سایت را باز کنید و دوباره تلاش کنید."); return; }
-        browserRef.current.injectJavaScript(FALLBACK_REPORT_JS);
+        browserRef.current.injectJavaScript(SITE_BRIDGE_JS);
+        setTimeout(() => browserRef.current?.injectJavaScript(FALLBACK_REPORT_JS), 1800);
         return;
       }
       if (message.type === "report.save") { await saveReports(); return; }
