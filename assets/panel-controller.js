@@ -86,10 +86,11 @@ const $ = (s, r = document) => r.querySelector(s);
     if (!r) return 'هنوز گزارشی از صفحه دریافت نشده است.';
     const media = Array.isArray(r.media) ? r.media.length : 0;
     const links = Array.isArray(r.videoLinks) ? r.videoLinks.length : 0;
+    const streams = Array.isArray(r.videoLinks) ? r.videoLinks.filter(v => /\.(m3u8|mpd)(?:[?#]|$)/i.test(String(v.url || ''))).length : 0;
     const resources = Array.isArray(r.resources) ? r.resources.length : 0;
     const db = Array.isArray(r.storage?.indexedDbNames) ? r.storage.indexedDbNames.length : 0;
     const cache = Array.isArray(r.storage?.cacheNames) ? r.storage.cacheNames.length : 0;
-    return `صفحه: ${r.title || r.url}\nرسانه‌ها: ${media} · لینک‌های ویدئویی: ${links} · منابع شبکه: ${resources}\nIndexedDB: ${db} پایگاه · Cache: ${cache} مورد\nزمان ثبت: ${r.capturedAt || 'نامشخص'}`;
+    return `صفحه: ${r.title || r.url}\nرسانه‌ها: ${media} · لینک‌های ویدئویی: ${links} · HLS: ${streams} · منابع شبکه: ${resources}\nIndexedDB: ${db} پایگاه · Cache: ${cache} مورد\nزمان ثبت: ${r.capturedAt || 'نامشخص'}`;
   }
   function renderReport() {
     const current = pageReports[0];

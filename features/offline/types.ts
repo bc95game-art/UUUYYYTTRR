@@ -32,6 +32,7 @@ export type PageReport = {
   referrer: string;
   media: Array<{ tag: string; src: string; currentSrc?: string; type?: string; size?: number }>;
   videoLinks: Array<{ url: string; text: string; download?: string }>;
+  streams?: Array<{ url: string; status?: number; contentType?: string; isMaster?: boolean; segmentCount?: number; encrypted?: boolean; preview?: string; error?: string }>;
   resources: Array<{ url: string; initiatorType?: string; size?: number; duration?: number }>;
   storage: { indexedDbNames: string[]; cacheNames: string[]; localStorageKeys: string[]; sessionStorageKeys: string[] };
   bridge: { installed: boolean; observedTransfers: number; observedDownloads: number };
