@@ -81,6 +81,7 @@ const $ = (s, r = document) => r.querySelector(s);
 
   /* ---------- گزارش واقعی صفحه و حافظهٔ WebView ---------- */
   let pageReports = [];
+  let reportTimer = null;
   function reportSummary(r) {
     if (!r) return 'هنوز گزارشی از صفحه دریافت نشده است.';
     const media = Array.isArray(r.media) ? r.media.length : 0;
@@ -97,11 +98,26 @@ const $ = (s, r = document) => r.querySelector(s);
     $('#reportJson').classList.toggle('show', !!current);
     $('#saveReport').disabled = !pageReports.length;
   }
-  function receivePageReports(list) { pageReports = Array.isArray(list) ? list : []; renderReport(); }
+  function receivePageReports(list) { clearTimeout(reportTimer); pageReports = Array.isArray(list) ? list : []; renderReport(); }
+  function receiveReportStatus(message) {
+    clearTimeout(reportTimer);
+    $('#reportSummary').textContent = String(message || 'از صفحهٔ سایت پاسخی دریافت نشد؛ ابتدا سایت را باز کنید و دوباره تلاش کنید.');
+    $('#reportJson').textContent = '';
+    $('#reportJson').classList.remove('show');
+    $('#saveReport').disabled = true;
+  }
   function receiveReportSaved(result) { toast(`گزارش ذخیره شد: ${result?.name || 'فایل گزارش'}`); }
   window.receivePageReports = receivePageReports;
+  window.receiveReportStatus = receiveReportStatus;
   window.receiveReportSaved = receiveReportSaved;
-  tap($('#refreshReport'), () => { $('#reportSummary').textContent = 'در حال استخراج اطلاعات صفحهٔ فعلی…'; send('report.refresh'); });
+  tap($('#refreshReport'), () => {
+    clearTimeout(reportTimer);
+    $('#reportSummary').textContent = 'در حال استخراج اطلاعات صفحهٔ فعلی…';
+    $('#reportJson').classList.remove('show');
+    $('#saveReport').disabled = true;
+    send('report.refresh');
+    reportTimer = setTimeout(() => receiveReportStatus('از صفحهٔ سایت در مهلت تعیین‌شده پاسخی دریافت نشد؛ صفحهٔ ویدئو را باز کنید و دوباره تلاش کنید.'), 10000);
+  });
   tap($('#saveReport'), () => { if (pageReports.length) send('report.save'); });
 
   /* پخش‌کننده */

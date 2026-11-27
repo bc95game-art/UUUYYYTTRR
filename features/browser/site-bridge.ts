@@ -3,7 +3,7 @@ export const TRANSFER_CHUNK_BYTES = 96 * 1024;
 
 /** Runs inside the current biomaze.ir document only; it never reads native storage. */
 export const SITE_BRIDGE_JS = `(function(){
-  if(window.__mazBridgeInstalled){true;return;} window.__mazBridgeInstalled=1;
+  if(window.__mazBridgeInstalled&&window.__mazCollectPageInfo){true;return;} window.__mazBridgeInstalled=1;
   var MAX=${MAX_TRANSFER_BYTES}, STEP=${TRANSFER_CHUNK_BYTES}, seen=window.__mazSeenOffline||(window.__mazSeenOffline={}), transfers={}, scanStarted=false, scanRunning=false;
   var observedTransfers=0, observedDownloads=0;
   function send(type,payload){if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage)window.ReactNativeWebView.postMessage(JSON.stringify({protocolVersion:1,requestId:'web-'+Date.now()+'-'+Math.random().toString(16).slice(2),type:type,payload:payload||{}}));}
@@ -20,12 +20,13 @@ export const SITE_BRIDGE_JS = `(function(){
   document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;if(a&&a.href){observedDownloads++;send('download.url',{url:a.href,name:a.getAttribute('download')||'',cookie:document.cookie,pageUrl:location.href});scanStarted=false;setTimeout(scanOnce,1500);}},true);
   function stringsFromStorage(storage){try{return Array.prototype.slice.call({length:storage.length},0).map(function(_,i){return storage.key(i);}).filter(Boolean).slice(0,100);}catch(e){return [];}}
   function urlOf(v){try{return new URL(v,location.href).href;}catch(e){return String(v||'');}}
+  function timeout(p,fallback,ms){return Promise.race([Promise.resolve(p),new Promise(function(resolve){setTimeout(function(){resolve(fallback);},ms);})]).catch(function(){return fallback;});}
   function collectPageInfo(){
     var media=[];try{Array.prototype.slice.call(document.querySelectorAll('video,audio,source')).slice(0,80).forEach(function(el){var src=el.currentSrc||el.src||el.getAttribute('src')||'';if(src)media.push({tag:el.tagName.toLowerCase(),src:urlOf(src),currentSrc:el.currentSrc?urlOf(el.currentSrc):undefined,type:el.getAttribute('type')||undefined,size:el.duration&&isFinite(el.duration)?el.duration:undefined});});}catch(e){}
     var videoLinks=[];try{Array.prototype.slice.call(document.querySelectorAll('a[href]')).slice(0,300).forEach(function(a){var u=urlOf(a.href);if(isVideo(u)||a.hasAttribute('download'))videoLinks.push({url:u,text:String(a.textContent||'').trim().slice(0,120),download:a.getAttribute('download')||undefined});});}catch(e){}
     var resources=[];try{performance.getEntriesByType('resource').slice(-150).forEach(function(r){var u=String(r.name||'');if(isVideo(u)||/video|media|blob|m3u8|mpd/i.test(u)||/fetch|xmlhttprequest/i.test(r.initiatorType||''))resources.push({url:u,initiatorType:r.initiatorType||undefined,size:r.transferSize||undefined,duration:r.duration||undefined});});}catch(e){}
-    var dbPromise=window.indexedDB&&window.indexedDB.databases?window.indexedDB.databases().then(function(ds){return (ds||[]).map(function(d){return d.name;}).filter(Boolean).slice(0,50);}).catch(function(){return [];}):Promise.resolve([]);
-    var cachePromise=window.caches?window.caches.keys().then(function(keys){return (keys||[]).slice(0,50);}).catch(function(){return [];}):Promise.resolve([]);
+    var dbPromise=window.indexedDB&&window.indexedDB.databases?timeout(window.indexedDB.databases().then(function(ds){return (ds||[]).map(function(d){return d.name;}).filter(Boolean).slice(0,50);}),[],1800):Promise.resolve([]);
+    var cachePromise=window.caches?timeout(window.caches.keys().then(function(keys){return (keys||[]).slice(0,50);}),[],1800):Promise.resolve([]);
     Promise.all([dbPromise,cachePromise]).then(function(parts){send('page.info',{id:'page-'+Date.now(),capturedAt:new Date().toISOString(),url:location.href,title:document.title||'',readyState:document.readyState,referrer:document.referrer||'',media:media,videoLinks:videoLinks,resources:resources,storage:{indexedDbNames:parts[0],cacheNames:parts[1],localStorageKeys:stringsFromStorage(window.localStorage),sessionStorageKeys:stringsFromStorage(window.sessionStorage)},bridge:{installed:true,observedTransfers:observedTransfers,observedDownloads:observedDownloads}});});
   }
   window.__mazCollectPageInfo=collectPageInfo;

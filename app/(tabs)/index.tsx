@@ -17,7 +17,7 @@ import type { OfflineVideo, PageReport } from "../../features/offline/types";
 const SITE = "https://biomaze.ir/";
 const PANEL_URI = "file:///android_asset/panel-5.html";
 const PANEL_MESSAGE_TYPES = new Set(["panel.ready", "open-site", "files.list", "file.open", "file.delete", "file.rename", "theme-change", "report.refresh", "report.save"]);
-const SITE_MESSAGE_TYPES = new Set(["download.url", "transfer.start", "transfer.chunk", "transfer.complete", "transfer.failed", "page.info"]);
+const SITE_MESSAGE_TYPES = new Set(["download.url", "transfer.start", "transfer.chunk", "transfer.complete", "transfer.failed", "page.info", "report.unavailable"]);
 type Mode = "ui" | "browser" | "player";
 
 function NativePlayer({ file, onClose }: { file: OfflineVideo; onClose: () => void }) {
@@ -52,6 +52,7 @@ export default function HomeScreen() {
 
   const pushSnapshot = useCallback((list = filesRef.current, revision = state.revision) => { panelRef.current?.injectJavaScript(`window.receiveFilesSnapshot && window.receiveFilesSnapshot(${JSON.stringify({ revision, files: list })}); true;`); }, [state.revision]);
   const pushReports = useCallback((list = reportsRef.current) => { panelRef.current?.injectJavaScript(`window.receivePageReports && window.receivePageReports(${JSON.stringify(list)}); true;`); }, []);
+  const pushReportStatus = useCallback((message: string) => { panelRef.current?.injectJavaScript(`window.receiveReportStatus && window.receiveReportStatus(${JSON.stringify(message)}); true;`); }, []);
   const saveReports = useCallback(async () => {
     const base = FileSystem.documentDirectory;
     if (!base) throw new Error("NO_STORAGE");
@@ -85,7 +86,11 @@ export default function HomeScreen() {
     try {
       if (message.type === "panel.ready") { const snapshot = await offlineRepository.initialize(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); pushReports(); return; }
       if (message.type === "open-site") { const next = browserUrlRef.current || String(p.url || SITE); browserUrlRef.current = next; setBrowserUrl(next); setBrowserSourceUrl(next); setBrowserMounted(true); setUiError(null); setBrowserError(null); setMode("browser"); return; }
-      if (message.type === "report.refresh") { browserRef.current?.injectJavaScript("window.__mazCollectPageInfo && window.__mazCollectPageInfo(); true;"); return; }
+      if (message.type === "report.refresh") {
+        if (!browserMounted || !browserRef.current) { pushReportStatus("صفحهٔ سایت هنوز باز نشده است؛ ابتدا سایت را باز کنید و دوباره تلاش کنید."); return; }
+        browserRef.current.injectJavaScript("if(window.__mazCollectPageInfo){window.__mazCollectPageInfo();}else{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({protocolVersion:1,requestId:'report-unavailable-'+Date.now(),type:'report.unavailable',payload:{message:'bridge-not-ready'}}));} true;");
+        return;
+      }
       if (message.type === "report.save") { await saveReports(); return; }
       if (message.type === "download.url") { await downloadVideo(String(p.url || ""), String(p.name || ""), String(p.cookie || ""), String(p.pageUrl || browserUrlRef.current)); return; }
       if (message.type === "transfer.start") { const id = String(p.transferId || ""); if (blobTransfers.start({ transferId: id, name: String(p.name || ""), mime: String(p.mime || "video/mp4"), total: Number(p.total), byteLength: Number(p.byteLength) })) dispatch({ type: "TRANSFER_START", id, total: Number(p.byteLength) }); return; }
@@ -93,12 +98,13 @@ export default function HomeScreen() {
       if (message.type === "transfer.failed") { throw new Error(String(p.error || "BLOB_READ_FAILED")); }
       if (message.type === "transfer.complete") { const id = String(p.transferId || ""); dispatch({ type: "TRANSFER_VERIFY", id }); await blobTransfers.complete(id); dispatch({ type: "TRANSFER_COMMIT", id }); const snapshot = await offlineRepository.refresh(); applySnapshot(snapshot.files); dispatch({ type: "SNAPSHOT", revision: snapshot.revision }); pushSnapshot(snapshot.files, snapshot.revision); return; }
       if (message.type === "page.info") { const report = p as unknown as PageReport; if (!report || typeof report.url !== "string" || !report.id) return; reportsRef.current = [report, ...reportsRef.current.filter((item) => item.id !== report.id)].slice(0, 20); pushReports(); return; }
+      if (message.type === "report.unavailable") { pushReportStatus("پل گزارش در صفحهٔ فعلی آماده نیست؛ صفحه را یک‌بار بارگذاری کنید و دوباره تلاش کنید."); return; }
       if (message.type === "files.list") { await sendFiles(); return; }
       if (message.type === "file.open") { const file = filesRef.current.find((item) => item.id === String(p.id)); if (file) { const check = await FileSystem.getInfoAsync(file.localUri); if (check.exists) { setActiveFile(file); setMode("player"); } } return; }
       if (message.type === "file.delete") { const next = await offlineRepository.remove(String(p.id)); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); return; }
       if (message.type === "file.rename") { const updated = await offlineRepository.rename(String(p.id), String(p.name || "")); const next = await offlineRepository.refresh(); applySnapshot(next.files); dispatch({ type: "SNAPSHOT", revision: next.revision }); pushSnapshot(next.files, next.revision); void updated; return; }
     } catch (error) { const messageText = String(error instanceof Error ? error.message : error); const transferId = String(p.transferId || ""); if (transferId) { blobTransfers.abort(transferId); browserRef.current?.injectJavaScript(`window.__mazNack && window.__mazNack(${JSON.stringify(transferId)}); true;`); } dispatch({ type: "ERROR", message: messageText }); if (message.type.startsWith("transfer.")) dispatch({ type: "TRANSFER_FAIL", id: transferId, message: messageText }); if (mode === "browser") setBrowserError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); else setUiError("عملیات با فایل انجام نشد؛ فایل ناقص یا دسترسی‌ناپذیر است."); }
-  }, [applySnapshot, blobTransfers, downloadVideo, mode, pushReports, pushSnapshot, saveReports, sendFiles]);
+  }, [applySnapshot, blobTransfers, browserMounted, downloadVideo, mode, pushReportStatus, pushReports, pushSnapshot, saveReports, sendFiles]);
   const onPanelMessage = useCallback((event: WebViewMessageEvent) => {
     const message = decode(event.nativeEvent.data);
     if (!message || !PANEL_MESSAGE_TYPES.has(message.type)) return;
