@@ -70,11 +70,10 @@
   @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
   .card { background: var(--section); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; transition: background .3s; }
-  #downloads .dl-head { min-height: 132px; background-image: linear-gradient(90deg, rgba(3,14,55,.82), rgba(8,45,130,.38)), url('notifications-background.png'); background-size: cover; background-position: center; color: #fff; border: 1px solid rgba(83,201,255,.55); }
+  #downloads .dl-head { min-height: 0; background-image: linear-gradient(90deg, rgba(3,14,55,.82), rgba(8,45,130,.38)), url('notifications-background.png'); background-size: cover; background-position: center; color: #fff; border: 1px solid rgba(83,201,255,.55); }
   #downloads .dl-head .ic { color: #8edcff; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.42); box-shadow: 0 10px 30px rgba(0,0,0,.24); backdrop-filter: blur(6px); }
-  #downloads .dl-title-box { padding: 8px 12px; border-radius: 14px; background: rgba(3,14,49,.44); border: 1px solid rgba(255,255,255,.18); width: fit-content; max-width: 100%; }
-  #downloads .dl-head h1 { color: #ffd34f; text-shadow: 0 2px 9px rgba(0,0,0,.75); }
-  #downloads .dl-head p { color: rgba(255,255,255,.94); line-height: 1.75; margin-top: 6px; }
+  #downloads .dl-title-box { padding: 6px 10px; border-radius: 12px; background: rgba(3,14,49,.44); border: 1px solid rgba(255,255,255,.18); width: fit-content; max-width: 100%; }
+  #downloads .dl-head h1 { color: #fff; font-size: 15px; text-shadow: 0 2px 9px rgba(0,0,0,.75); }
 
   /* ---------- خانه: مرورگر ---------- */
   .toolbar { display: flex; align-items: center; gap: 8px; }
@@ -152,6 +151,18 @@
   .metric-icon.film { color: #ef7b37; }
   .metric-icon.storage { color: #247fca; }
   .stats i { color: var(--separator); font-style: normal; font-size: 24px; }
+  .report-card { padding: 14px; background: var(--section); }
+  .report-head { display: flex; align-items: center; gap: 10px; }
+  .report-head .report-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; background: linear-gradient(180deg, #7b5cf0, #4d35b5); font-size: 20px; flex-shrink: 0; }
+  .report-head .report-title { flex: 1; min-width: 0; }
+  .report-head h2 { font-size: 15px; font-weight: 800; }
+  .report-head p { margin-top: 3px; color: var(--hint); font-size: 11.5px; line-height: 1.6; }
+  .report-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .report-actions .btn { height: 40px; font-size: 12.5px; }
+  .report-actions .btn:disabled { opacity: .45; }
+  .report-summary { margin-top: 10px; padding: 10px 12px; border-radius: 13px; background: var(--fill); color: var(--hint); font-size: 12px; line-height: 1.9; white-space: pre-wrap; }
+  .report-json { display: none; max-height: 230px; overflow: auto; margin-top: 9px; padding: 10px; border-radius: 12px; background: #101820; color: #d9efff; direction: ltr; text-align: left; font: 11px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+  .report-json.show { display: block; }
 
   /* ---------- اعلان‌ها ---------- */
   #notifs .empty-full { margin: auto; text-align: center; color: var(--hint); font-size: 14px; }
@@ -164,8 +175,11 @@
 
   /* ---------- تنظیمات ---------- */
   .section-head { padding: 0 12px 7px; font-size: 13px; font-weight: 700; color: var(--hint); }
-  #settings .settings-hero { min-height: 224px; margin-bottom: 14px; display: block; padding: 0; border: 1px solid rgba(255,80,80,.72); background-image: linear-gradient(180deg, rgba(40,0,0,.04), rgba(15,0,0,.16)), url('settings-background.png'); background-size: cover; background-position: center; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
-  #settings .settings-card { padding-top: 8px; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+  #settings .settings-card { padding: 14px; box-shadow: 0 12px 28px rgba(0,0,0,.18); background-image: linear-gradient(90deg, rgba(3,14,55,.82), rgba(8,45,130,.38)), url('notifications-background.png'); background-size: cover; background-position: center; border: 1px solid rgba(83,201,255,.55); }
+  #settings .settings-title-box { display: flex; align-items: center; gap: 9px; width: fit-content; max-width: 100%; margin-bottom: 12px; padding: 7px 11px; border-radius: 13px; background: rgba(3,14,49,.45); border: 1px solid rgba(255,255,255,.2); color: #fff; }
+  #settings .settings-title-box .emoji { font-size: 20px; }
+  #settings .settings-title-box strong { font-size: 15px; }
+  #settings .settings-card .row { background: rgba(255,255,255,.92); border-radius: 16px; padding-inline-start: 12px; }
   .row { display: flex; align-items: center; gap: 12px; padding-inline-start: 16px; }
   .row .ic { width: 38px; height: 38px; border-radius: 12px; color: #fff; display: grid; place-items: center; font-size: 19px; flex-shrink: 0; }
   .row .body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 13px 0; padding-inline-end: 16px; border-top: 1px solid var(--separator); }
@@ -264,7 +278,7 @@
     <section class="page" id="downloads">
       <div class="card dl-head">
         <span class="ic g-blue"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
-        <div><div class="dl-title-box"><h1>بخش دانلودهای داخلی مرورگر</h1></div><p>ویدیوهای ذخیره‌شدهٔ آفلاین شما</p></div>
+        <div><div class="dl-title-box"><h1>بخش دانلودهای داخلی مرورگر</h1></div></div>
       </div>
       <label class="search" id="searchBox">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -277,6 +291,12 @@
         <div><b id="videoSize">0 MB</b><span class="metric-label"><svg class="metric-icon storage" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg> حجم کل ویدیوها</span></div>
       </div>
       <div class="card list" id="list"></div>
+      <div class="card report-card" id="reportCard">
+        <div class="report-head"><span class="report-icon">⌁</span><div class="report-title"><h2>تمام اطلاعات دریافت‌شده از صفحات</h2><p>گزارش فنی واقعی از صفحهٔ فعلی، رسانه‌ها و حافظهٔ وب‌ویو</p></div></div>
+        <div class="report-summary" id="reportSummary">هنوز گزارشی از صفحه دریافت نشده است.</div>
+        <pre class="report-json" id="reportJson"></pre>
+        <div class="report-actions"><button class="btn" id="refreshReport">استخراج اطلاعات صفحه</button><button class="btn ghost" id="saveReport" disabled>ذخیره گزارش</button></div>
+      </div>
     </section>
 
     <!-- ===== اعلان‌ها: صفحهٔ نمایشی ===== -->
@@ -291,8 +311,8 @@
     <!-- ===== تنظیمات ===== -->
     <section class="page" id="settings">
       <div>
-        <div class="card settings-hero" aria-label="بنر تنظیمات"></div>
         <div class="card settings-card">
+          <div class="settings-title-box"><span class="emoji">🎨</span><strong>پوستهٔ نمایشی</strong></div>
           <div class="row"><span class="ic g-purple"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></span><span class="body"><span class="info"><span class="title">پوستهٔ نمایشی</span></span>
             <div class="seg" id="themeSeg"><button data-t="light">روشن</button><button data-t="dark">تاریک</button><button data-t="auto" class="on">خودکار</button></div></span></div>
         </div>

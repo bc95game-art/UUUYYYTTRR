@@ -79,6 +79,31 @@ const $ = (s, r = document) => r.querySelector(s);
     if (o) openVideo(o.dataset.open); else if (m) openMenu(m.dataset.more);
   });
 
+  /* ---------- گزارش واقعی صفحه و حافظهٔ WebView ---------- */
+  let pageReports = [];
+  function reportSummary(r) {
+    if (!r) return 'هنوز گزارشی از صفحه دریافت نشده است.';
+    const media = Array.isArray(r.media) ? r.media.length : 0;
+    const links = Array.isArray(r.videoLinks) ? r.videoLinks.length : 0;
+    const resources = Array.isArray(r.resources) ? r.resources.length : 0;
+    const db = Array.isArray(r.storage?.indexedDbNames) ? r.storage.indexedDbNames.length : 0;
+    const cache = Array.isArray(r.storage?.cacheNames) ? r.storage.cacheNames.length : 0;
+    return `صفحه: ${r.title || r.url}\nرسانه‌ها: ${media} · لینک‌های ویدئویی: ${links} · منابع شبکه: ${resources}\nIndexedDB: ${db} پایگاه · Cache: ${cache} مورد\nزمان ثبت: ${r.capturedAt || 'نامشخص'}`;
+  }
+  function renderReport() {
+    const current = pageReports[0];
+    $('#reportSummary').textContent = reportSummary(current);
+    $('#reportJson').textContent = current ? JSON.stringify({ generatedAt: new Date().toISOString(), pages: pageReports }, null, 2) : '';
+    $('#reportJson').classList.toggle('show', !!current);
+    $('#saveReport').disabled = !pageReports.length;
+  }
+  function receivePageReports(list) { pageReports = Array.isArray(list) ? list : []; renderReport(); }
+  function receiveReportSaved(result) { toast(`گزارش ذخیره شد: ${result?.name || 'فایل گزارش'}`); }
+  window.receivePageReports = receivePageReports;
+  window.receiveReportSaved = receiveReportSaved;
+  tap($('#refreshReport'), () => { $('#reportSummary').textContent = 'در حال استخراج اطلاعات صفحهٔ فعلی…'; send('report.refresh'); });
+  tap($('#saveReport'), () => { if (pageReports.length) send('report.save'); });
+
   /* پخش‌کننده */
   function openVideo(id) {
     const v = videos.find(x => x.id === id); if (!v) return;
